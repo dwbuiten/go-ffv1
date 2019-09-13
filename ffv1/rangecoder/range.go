@@ -74,75 +74,75 @@ func (c *Coder) buildStates() {
 	}
 }
 
-func (c* Coder) refill() {
-    if c.rng < 0x100 {
-        c.rng = c.rng << 8
-        c.low = c.low << 8
-        if (c.pos < len(c.buf)) {
-            c.low += uint16(c.buf[c.pos])
-            c.pos++
-        } else {
-            c.overread++
-        }
-    }
+func (c *Coder) refill() {
+	if c.rng < 0x100 {
+		c.rng = c.rng << 8
+		c.low = c.low << 8
+		if c.pos < len(c.buf) {
+			c.low += uint16(c.buf[c.pos])
+			c.pos++
+		} else {
+			c.overread++
+		}
+	}
 }
 
-func (c* Coder) get(state *uint8) bool {
-    rangeoff := uint16((uint32(c.rng) * uint32((*state))) >> 8)
-    c.rng -= rangeoff
-    if (c.low < c.rng) {
-        *state = c.zero_state[int(*state)]
-        c.refill()
-        return false
-    } else {
-        c.low -= c.rng
-        *state = c.one_state[int(*state)]
-        c.rng = rangeoff
-        c.refill()
-        return true
-    }
+func (c *Coder) get(state *uint8) bool {
+	rangeoff := uint16((uint32(c.rng) * uint32((*state))) >> 8)
+	c.rng -= rangeoff
+	if c.low < c.rng {
+		*state = c.zero_state[int(*state)]
+		c.refill()
+		return false
+	} else {
+		c.low -= c.rng
+		*state = c.one_state[int(*state)]
+		c.rng = rangeoff
+		c.refill()
+		return true
+	}
 }
 
 func (c *Coder) UR(state []uint8) int32 {
-    return c.symbol(state, false)
+	return c.symbol(state, false)
 }
 
 func (c *Coder) SR(state []uint8) int32 {
-    return c.symbol(state, true)
+	return c.symbol(state, true)
 }
 
 func (c *Coder) BR(state []uint8) int32 {
-    if c.get(&state[0]) {
-        return 1
-    } else {
-        return 0
-    }
+	if c.get(&state[0]) {
+		return 1
+	} else {
+		return 0
+	}
 }
 
 func (c *Coder) symbol(state []uint8, signed bool) int32 {
-    if c.get(&state[0]) {
-        return 0
-    }
+	if c.get(&state[0]) {
+		return 0
+	}
 
-    e := int32(0)
-    for c.get(&state[1 + min32(e, 9)]) {
-        e++
-        if e > 31 {
-            panic("WTF range coder!")
-        }
-    }
+	e := int32(0)
+	for c.get(&state[1+min32(e, 9)]) {
+		e++
+		if e > 31 {
+			panic("WTF range coder!")
+		}
+	}
 
-    a := uint32(1)
-    for i := e - 1; i >= 0; i-- {
-        a = a * 2
-        if c.get(&state[22 + min32(i, 9)]) {
-            a++
-        }
-    }
+	a := uint32(1)
+	for i := e - 1; i >= 0; i-- {
+		a = a * 2
+		if c.get(&state[22+min32(i, 9)]) {
+			a++
+		}
+	}
 
-    if signed && c.get(&state[11+min32(e,10)]) {
-        return -(int32(a))
-    } else {
-        return int32(a)
-    }
+	if signed && c.get(&state[11+min32(e, 10)]) {
+		return -(int32(a))
+	} else {
+		return int32(a)
+	}
 }
