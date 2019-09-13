@@ -26,52 +26,13 @@ func NewCoder(buf []byte) *Coder {
 		ret.pos = len(buf) - 1
 	}
 
-	ret.buildStates()
-
-	return ret
-}
-
-// Change this to a LUT
-func (c *Coder) buildStates() {
-	factor := int32(214748364) // int32(float64(int64(1<<32)) * 0.05)
-	max_p := int32(256 - 8)
-	one := int64(1) << 32
-	last_p8 := int32(0)
-	p := one / 2
-
-	var p8 int32
-	for i := 0; i < 128; i++ {
-		p8 = int32((256*p + one/2) >> 32)
-		if p8 <= last_p8 {
-			p8 = last_p8 + 1
-		}
-		if last_p8 != 0 && last_p8 < 256 && p8 <= max_p {
-			c.one_state[int(last_p8)] = uint8(p8)
-		}
-
-		p += ((one-p)*int64(factor) + one/2) >> 32
-		last_p8 = p8
-	}
-
-	for i := 256 - max_p; i <= max_p; i++ {
-		if c.one_state[i] != 0 {
-			continue
-		}
-
-		p = (int64(i)*one + 128) >> 8
-		p += ((one-p)*int64(factor) + one/2) >> 32
-		p8 = int32((256*p + one/2) >> 32)
-		if p8 <= i {
-			p8 = i + 1
-		}
-		if p8 > max_p {
-			p8 = max_p
-		}
-		c.one_state[i] = uint8(p8)
+	for i := 0; i < 256; i++ {
+		ret.one_state[i] = default_state_transition[i]
 	}
 	for i := 1; i < 255; i++ {
-		c.zero_state[i] = uint8(uint16(256) - uint16(c.one_state[256-i]))
+		ret.zero_state[i] = uint8(uint16(256) - uint16(ret.one_state[256-i]))
 	}
+	return ret
 }
 
 func (c *Coder) refill() {
