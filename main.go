@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dwbuiten/go-ffv1/ffv1/rangecoder"
+	"github.com/dwbuiten/go-ffv1/ffv1"
 	"github.com/dwbuiten/go-ffv1/matroska"
 )
 
@@ -28,34 +28,8 @@ func main() {
 
 	fmt.Printf("extradata = %d packet = %d track = %d\n", len(extradata), len(packet), track)
 
-	state := make([]uint8, 32)
-	for i := 0; i < 32; i++ {
-		state[i] = 128
+	_, err = ffv1.NewDecoder(extradata)
+	if err != nil {
+		log.Fatalln(err)
 	}
-
-	c := rangecoder.NewCoder(extradata)
-	version := c.UR(state)
-	fmt.Println(version)
-	version = c.UR(state)
-	fmt.Println(version)
-	version = c.UR(state)
-	fmt.Println(version)
-	version = c.UR(state)
-	fmt.Println(version)
-	version = c.UR(state)
-	fmt.Println(version)
-	version = c.BR(state)
-	fmt.Println(version)
-	version = c.UR(state)
-	fmt.Println(version)
-	version = c.UR(state)
-	fmt.Println(version)
-	version = c.BR(state)
-	fmt.Println(version)
-	version = c.UR(state)
-	fmt.Println(version)
-	version = c.UR(state)
-	fmt.Println(version)
-	version = c.UR(state)
-	fmt.Println(version)
 }

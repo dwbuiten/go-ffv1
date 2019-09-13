@@ -18,3 +18,5 @@ var default_state_transition = [256]uint8{
 	226, 227, 227, 229, 229, 230, 231, 232, 234, 234, 235, 236, 237, 238, 239, 240,
 	241, 242, 243, 244, 245, 246, 247, 248, 248, 0, 0, 0, 0, 0, 0, 0,
 }
+
+var DefaultStateTransition = default_state_transition

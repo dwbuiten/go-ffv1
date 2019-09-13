@@ -64,20 +64,16 @@ func (c *Coder) get(state *uint8) bool {
 	}
 }
 
-func (c *Coder) UR(state []uint8) int32 {
-	return c.symbol(state, false)
+func (c *Coder) UR(state []uint8) uint32 {
+	return uint32(c.symbol(state, false))
 }
 
 func (c *Coder) SR(state []uint8) int32 {
 	return c.symbol(state, true)
 }
 
-func (c *Coder) BR(state []uint8) int32 {
-	if c.get(&state[0]) {
-		return 1
-	} else {
-		return 0
-	}
+func (c *Coder) BR(state []uint8) bool {
+	return c.get(&state[0])
 }
 
 func (c *Coder) symbol(state []uint8, signed bool) int32 {
