@@ -59,7 +59,7 @@ func (d *Demuxer) ReadCodecPrivate(track uint) ([]byte, error) {
 		return nil, fmt.Errorf("could not get codec private: %s", reason)
 	}
 
-	return C.GoBytes(unsafe.Pointer(info.CodecPrivate), C.int(info.CodecPrivateSize)), nil
+	return C.GoBytes(unsafe.Pointer(uintptr(unsafe.Pointer(info.CodecPrivate))+40), C.int(info.CodecPrivateSize-40)), nil
 }
 
 func (d *Demuxer) ReadPacket() ([]byte, uint, error) {
