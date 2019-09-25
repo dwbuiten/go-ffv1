@@ -97,3 +97,13 @@ int free_io(IO *io)
     fclose(io->file);
     free(io);
 }
+
+unsigned int get_width(TrackInfo *info)
+{
+    return info->AV.Video.PixelWidth;
+}
+
+unsigned int get_height(TrackInfo *info)
+{
+    return info->AV.Video.PixelHeight;
+}

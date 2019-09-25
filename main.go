@@ -16,6 +16,13 @@ func main() {
 	}
 	defer mat.Close()
 
+	width, height, err := mat.GetDimensions(0)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	fmt.Printf("Encode is %dx%d\n", width, height)
+
 	extradata, err := mat.ReadCodecPrivate(0)
 	if err != nil {
 		log.Fatalln(err)

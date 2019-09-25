@@ -78,3 +78,14 @@ func (d *Demuxer) ReadPacket() ([]byte, uint, error) {
 
 	return gdata, uint(track), nil
 }
+
+func (d *Demuxer) GetDimensions(track uint) (uint32, uint32, error) {
+	info := C.mkv_GetTrackInfo(d.m, C.unsigned(track))
+
+	if info == nil {
+		reason := C.GoString(d.errbuf)
+		return 0, 0, fmt.Errorf("could not get track info: %s", reason)
+	}
+
+	return uint32(C.get_width(info)), uint32(C.get_height(info)), nil
+}
