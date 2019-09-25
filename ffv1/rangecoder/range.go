@@ -103,3 +103,12 @@ func (c *Coder) symbol(state []uint8, signed bool) int32 {
 		return int32(a)
 	}
 }
+
+func (c *Coder) SetTable(table [256]uint8) {
+	for i := 0; i < 256; i++ {
+		c.one_state[i] = table[i]
+	}
+	for i := 1; i < 255; i++ {
+		c.zero_state[i] = uint8(uint16(256) - uint16(c.one_state[256-i]))
+	}
+}
