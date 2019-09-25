@@ -119,6 +119,10 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 
 	d.parseSliceHeader(c, &header.slices[slicenum])
 
+	if d.record.coder_type != 1 && d.record.coder_type != 2 {
+		panic("golomb not implemented yet")
+	}
+
 	fmt.Println(header.slices[slicenum].header)
 
 	return nil
