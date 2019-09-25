@@ -2,6 +2,7 @@ package ffv1
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/dwbuiten/go-ffv1/ffv1/rangecoder"
 )
@@ -18,7 +19,11 @@ type sliceInfo struct {
 }
 
 type slice struct {
-	header sliceHeader
+	header  sliceHeader
+	start_x uint32
+	start_y uint32
+	width   uint32
+	height  uint32
 }
 
 type sliceHeader struct {
@@ -98,6 +103,48 @@ func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
 	s.header.picture_structure = uint8(c.UR(slice_state))
 	s.header.sar_num = c.UR(slice_state)
 	s.header.sar_den = c.UR(slice_state)
+
+	// Calculate bounaries for easy use elsewhere
+	s.start_x = s.header.slice_x * d.width / (uint32(d.record.num_h_slices_minus1) + 1)
+	s.start_y = s.header.slice_y * d.height / (uint32(d.record.num_v_slices_minus1) + 1)
+	s.width = ((s.header.slice_x + s.header.slice_width_minus1 + 1) * d.width / (uint32(d.record.num_h_slices_minus1) + 1)) - s.start_x
+	s.height = ((s.header.slice_y + s.header.slice_height_minus1 + 1) * d.height / (uint32(d.record.num_v_slices_minus1) + 1)) - s.start_y
+}
+
+func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, si *sliceInfo, s *slice, frame *Frame) {
+	if d.record.colorspace_type != 0 {
+		panic("only YCbCr support")
+	}
+
+	primary_color_count := 1
+	chroma_planes := 0
+	if d.record.chroma_planes {
+		chroma_planes = 2
+		primary_color_count += 2
+	}
+	if d.record.extra_plan {
+		primary_color_count++
+	}
+
+	for p := 0; p < primary_color_count; p++ {
+		var plane_pixel_height int
+		var plane_pixel_width int
+		if p == 0 || p == 1+chroma_planes {
+			plane_pixel_height = s.height
+			plane_pixel_width = s.width
+		} else {
+			// This is, of course, silly, but I want to do it "by the spec".
+			plane_pixel_height = int(math.Ceil(float64(s.height) / float64(1<<d.record.log2_v_chroma_subsample)))
+			plane_pixel_width = int(math.Ceil(float64(s.width) / float64(1<<d.record.log2_h_chroma_subsample)))
+		}
+
+		for y := 0; i < plane_pixel_height; y++ {
+			// Line()
+			for x := 0; x < plane_pixel_width; x++ {
+				//continue here
+			}
+		}
+	}
 }
 
 func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, frame *Frame) error {
@@ -118,12 +165,14 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 	}
 
 	d.parseSliceHeader(c, &header.slices[slicenum])
+	fmt.Println(header.slices[slicenum])
 
 	if d.record.coder_type != 1 && d.record.coder_type != 2 {
 		panic("golomb not implemented yet")
 	}
 
-	fmt.Println(header.slices[slicenum].header)
+	//TODO: Coder types!
+	d.decodeSliceContent(c, &header.slice_info[slicenum], &header.slices[slicenum], frame)
 
 	return nil
 }
