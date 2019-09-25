@@ -50,6 +50,7 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 	if record.coder_type > 2 {
 		return fmt.Errorf("invalid coder_type: %d", record.coder_type)
 	}
+	fmt.Printf("coder type is %d\n", record.coder_type)
 
 	if record.coder_type > 1 {
 		for i := 1; i < 256; i++ {
@@ -65,6 +66,9 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 	record.bits_per_raw_sample = uint8(c.UR(state))
 	if record.bits_per_raw_sample == 0 {
 		record.bits_per_raw_sample = 8
+	}
+	if record.bits_per_raw_sample != 8 {
+		panic("high bit depth not implemented yet!")
 	}
 
 	record.chroma_planes = c.BR(state)
