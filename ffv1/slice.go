@@ -100,7 +100,7 @@ func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
 	s.header.sar_den = c.UR(slice_state)
 }
 
-func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int) error {
+func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, frame *Frame) error {
 	c := rangecoder.NewCoder(buf[header.slice_info[slicenum].pos:])
 
 	state := make([]uint8, ContextSize)
