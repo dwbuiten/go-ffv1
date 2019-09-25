@@ -35,8 +35,14 @@ func main() {
 
 	fmt.Printf("extradata = %d packet = %d track = %d\n", len(extradata), len(packet), track)
 
-	_, err = ffv1.NewDecoder(extradata)
+	d, err := ffv1.NewDecoder(extradata, width, height)
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	frame, err := d.DecodeFrame(packet)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Printf("Frame decoded at %dx%d\n", frame.Width, frame.Height)
 }
