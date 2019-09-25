@@ -31,8 +31,8 @@ type configRecord struct {
 func parseConfigRecord(buf []byte, record *configRecord) error {
 	c := rangecoder.NewCoder(buf)
 
-	state := make([]uint8, 32)
-	for i := 0; i < 32; i++ {
+	state := make([]uint8, ContextSize)
+	for i := 0; i < ContextSize; i++ {
 		state[i] = 128
 	}
 
@@ -101,8 +101,8 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 		scale := 1
 		for j := 0; j < MaxContextInputs; j++ {
 			// Each table has its own state table! Not mentioned in the spec.
-			quant_state := make([]byte, 32)
-			for qs := 0; qs < 32; qs++ {
+			quant_state := make([]byte, ContextSize)
+			for qs := 0; qs < ContextSize; qs++ {
 				quant_state[qs] = 128
 			}
 			v := 0

@@ -71,8 +71,8 @@ func (d *Decoder) parseFooters(buf []byte, header *internalFrame) error {
 }
 
 func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
-	slice_state := make([]uint8, 32)
-	for i := 0; i < 32; i++ {
+	slice_state := make([]uint8, ContextSize)
+	for i := 0; i < ContextSize; i++ {
 		slice_state[i] = 128
 	}
 
@@ -103,8 +103,8 @@ func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
 func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int) error {
 	c := rangecoder.NewCoder(buf[header.slice_info[slicenum].pos:])
 
-	state := make([]uint8, 32)
-	for i := 0; i < 32; i++ {
+	state := make([]uint8, ContextSize)
+	for i := 0; i < ContextSize; i++ {
 		state[i] = 128
 	}
 
