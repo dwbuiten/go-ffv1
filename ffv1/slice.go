@@ -44,9 +44,9 @@ func countSlices(buf []byte, header *internalFrame, ec bool) error {
 		footerSize += 5
 	}
 
-    // Go over the packet from the end to start, reading the footer,
-    // so we can derive the slice positions within the packet, and
-    // allow multithreading.
+	// Go over the packet from the end to start, reading the footer,
+	// so we can derive the slice positions within the packet, and
+	// allow multithreading.
 	endPos := len(buf)
 	for endPos > 0 {
 		var info sliceInfo
