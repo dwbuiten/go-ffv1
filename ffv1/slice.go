@@ -24,6 +24,7 @@ type slice struct {
 	start_y uint32
 	width   uint32
 	height  uint32
+	state   [][][]uint8
 }
 
 type sliceHeader struct {
@@ -43,6 +44,9 @@ func countSlices(buf []byte, header *internalFrame, ec bool) error {
 		footerSize += 5
 	}
 
+    // Go over the packet from the end to start, reading the footer,
+    // so we can derive the slice positions within the packet, and
+    // allow multithreading.
 	endPos := len(buf)
 	for endPos > 0 {
 		var info sliceInfo
@@ -122,32 +126,82 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, si *sliceInfo, s *slic
 		chroma_planes = 2
 		primary_color_count += 2
 	}
-	if d.record.extra_plan {
+	if d.record.extra_plane {
 		primary_color_count++
 	}
 
 	for p := 0; p < primary_color_count; p++ {
 		var plane_pixel_height int
 		var plane_pixel_width int
+		var plane_pixel_stride int
+		var start_x int
+		var start_y int
+		var quant_table int
 		if p == 0 || p == 1+chroma_planes {
-			plane_pixel_height = s.height
-			plane_pixel_width = s.width
+			plane_pixel_height = int(s.height)
+			plane_pixel_width = int(s.width)
+			plane_pixel_stride = int(d.width)
+			start_x = int(s.start_x)
+			start_y = int(s.start_y)
+			if p == 0 {
+				quant_table = 0
+			} else {
+				quant_table = chroma_planes
+			}
 		} else {
 			// This is, of course, silly, but I want to do it "by the spec".
-			plane_pixel_height = int(math.Ceil(float64(s.height) / float64(1<<d.record.log2_v_chroma_subsample)))
-			plane_pixel_width = int(math.Ceil(float64(s.width) / float64(1<<d.record.log2_h_chroma_subsample)))
+			plane_pixel_height = int(math.Ceil(float64(s.height) / float64(uint32(1)<<d.record.log2_v_chroma_subsample)))
+			plane_pixel_width = int(math.Ceil(float64(s.width) / float64(uint32(1)<<d.record.log2_h_chroma_subsample)))
+			plane_pixel_stride = int(math.Ceil(float64(d.width) / float64(uint32(1)<<d.record.log2_h_chroma_subsample)))
+			start_x = int(math.Ceil(float64(s.start_x) / float64(uint32(1)<<d.record.log2_v_chroma_subsample)))
+			start_y = int(math.Ceil(float64(s.start_y) / float64(uint32(1)<<d.record.log2_h_chroma_subsample)))
+			quant_table = 1
 		}
 
-		for y := 0; i < plane_pixel_height; y++ {
+		for y := 0; y < plane_pixel_height; y++ {
 			// Line()
 			for x := 0; x < plane_pixel_width; x++ {
-				//continue here
+				var sign bool
+
+				buf := frame.Buf[p][start_y*plane_pixel_stride+start_x:]
+
+				// Derive neighbours
+				T, L, t, l, tr, tl := deriveBorders(buf, x, y, plane_pixel_width, plane_pixel_height, plane_pixel_stride)
+
+				context := getContext(d.record.quant_tables[s.header.quant_table_set_index[quant_table]], T, L, t, l, tr, tl)
+				if context < 0 {
+					context = -context
+					sign = true
+				} else {
+					sign = false
+				}
+
+				//TODO: golomb mode
+				diff := c.SR(s.state[quant_table][context])
+
+				if sign {
+					diff = -diff
+				}
+
+				val := diff + int32(getMedian(l, t, l+t-tl))
+				val = val & ((1 << d.record.bits_per_raw_sample) - 1) // Section 3.8
+
+				buf[(y*plane_pixel_stride)+x] = byte(val)
 			}
 		}
 	}
 }
 
 func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, frame *Frame) error {
+	header.slices[slicenum].state = make([][][]uint8, len(d.initial_states))
+	for i := 0; i < len(d.initial_states); i++ {
+		header.slices[slicenum].state[i] = make([][]uint8, len(d.initial_states[i]))
+		for j := 0; j < len(d.initial_states[i]); j++ {
+			header.slices[slicenum].state[i][j] = make([]uint8, len(d.initial_states[i][j]))
+			copy(header.slices[slicenum].state[i][j], d.initial_states[i][j])
+		}
+	}
+
 	c := rangecoder.NewCoder(buf[header.slice_info[slicenum].pos:])
 
 	state := make([]uint8, ContextSize)
@@ -155,9 +209,9 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 		state[i] = 128
 	}
 
+	// TODO: check outside slice stuff for threading reasons
 	if slicenum == 0 {
 		header.keyframe = c.BR(state)
-		fmt.Println("keyframe = ", header.keyframe)
 	}
 
 	if d.record.coder_type == 2 { // Custom state transition table
@@ -165,7 +219,6 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 	}
 
 	d.parseSliceHeader(c, &header.slices[slicenum])
-	fmt.Println(header.slices[slicenum])
 
 	if d.record.coder_type != 1 && d.record.coder_type != 2 {
 		panic("golomb not implemented yet")

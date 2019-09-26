@@ -2,6 +2,7 @@ package ffv1
 
 import (
 	"fmt"
+	"sync"
 )
 
 type Decoder struct {
@@ -52,6 +53,7 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 		numPlanes++
 	}
 
+	// Hideous and temporary.
 	ret.Buf = make([][]byte, numPlanes)
 	ret.Buf[0] = make([]byte, int(d.width*d.height))
 	if d.record.chroma_planes {
@@ -69,9 +71,21 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 		return nil, fmt.Errorf("invalid frame footer: %s", err.Error())
 	}
 
-	err = d.decodeSlice(frame, &d.current_frame, 0, ret)
-	if err != nil {
-		return nil, fmt.Errorf("could not decode slice 0: %s", err.Error())
+	// Slice threading lazymode
+	errs := make([]error, len(d.current_frame.slices))
+	wg := new(sync.WaitGroup)
+	for i := 0; i < len(d.current_frame.slices); i++ {
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, errs []error, n int) {
+			errs[n] = d.decodeSlice(frame, &d.current_frame, n, ret)
+			wg.Done()
+		}(wg, errs, i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			return nil, fmt.Errorf("slice %s failed: %s", i, err.Error())
+		}
 	}
 
 	return ret, nil

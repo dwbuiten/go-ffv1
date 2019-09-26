@@ -50,7 +50,6 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 	if record.coder_type > 2 {
 		return fmt.Errorf("invalid coder_type: %d", record.coder_type)
 	}
-	fmt.Printf("coder type is %d\n", record.coder_type)
 
 	if record.coder_type > 1 {
 		for i := 1; i < 256; i++ {
@@ -100,7 +99,7 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 	for i := 0; i < int(record.quant_table_set_count); i++ {
 		scale := 1
 		for j := 0; j < MaxContextInputs; j++ {
-			// Each table has its own state table! Not mentioned in the spec.
+			// Each table has its own state table.
 			quant_state := make([]byte, ContextSize)
 			for qs := 0; qs < ContextSize; qs++ {
 				quant_state[qs] = 128

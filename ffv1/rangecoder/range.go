@@ -5,11 +5,9 @@ type Coder struct {
 	pos        int
 	low        uint16
 	rng        uint16
-	left       int32
 	cur_byte   int32
 	zero_state [256]uint8
 	one_state  [256]uint8
-	overread   uint8
 }
 
 func NewCoder(buf []byte) *Coder {
@@ -19,19 +17,14 @@ func NewCoder(buf []byte) *Coder {
 	ret.pos = 2
 	ret.low = uint16(buf[0])<<8 | uint16(buf[1])
 	ret.rng = 0xFF00
-	ret.left = 0
 	ret.cur_byte = -1
 	if ret.low >= ret.rng {
 		ret.low = ret.rng
 		ret.pos = len(buf) - 1
 	}
 
-	for i := 0; i < 256; i++ {
-		ret.one_state[i] = default_state_transition[i]
-	}
-	for i := 1; i < 255; i++ {
-		ret.zero_state[i] = uint8(uint16(256) - uint16(ret.one_state[256-i]))
-	}
+	ret.SetTable(DefaultStateTransition)
+
 	return ret
 }
 
@@ -42,8 +35,6 @@ func (c *Coder) refill() {
 		if c.pos < len(c.buf) {
 			c.low += uint16(c.buf[c.pos])
 			c.pos++
-		} else {
-			c.overread++
 		}
 	}
 }
