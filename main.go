@@ -8,42 +8,44 @@ import (
 	"os"
 
 	"github.com/dwbuiten/go-ffv1/ffv1"
-	"github.com/dwbuiten/go-ffv1/matroska"
+	"github.com/dwbuiten/matroska"
 )
 
 func main() {
-	// this is a crappy demuxer
-	mat, err := matroska.NewDemuxer("input.mkv")
+	f, err := os.Open("input.mkv")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer f.Close()
+
+	mat, err := matroska.NewDemuxer(f)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer mat.Close()
 
-	width, height, err := mat.GetDimensions(0)
+	ti, err := mat.GetTrackInfo(0)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	fmt.Printf("Encode is %dx%d\n", width, height)
+	fmt.Printf("Encode is %dx%d\n", ti.Video.PixelWidth, ti.Video.PixelHeight)
 
-	extradata, err := mat.ReadCodecPrivate(0)
+	extradata := ti.CodecPrivate[40:]
+
+	packet, err := mat.ReadPacket()
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	packet, track, err := mat.ReadPacket()
+	fmt.Printf("extradata = %d packet = %d track = %d\n", len(extradata), len(packet.Data), packet.Track)
+
+	d, err := ffv1.NewDecoder(extradata, ti.Video.PixelWidth, ti.Video.PixelHeight)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	fmt.Printf("extradata = %d packet = %d track = %d\n", len(extradata), len(packet), track)
-
-	d, err := ffv1.NewDecoder(extradata, width, height)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	frame, err := d.DecodeFrame(packet)
+	frame, err := d.DecodeFrame(packet.Data)
 	if err != nil {
 		log.Fatalln(err)
 	}
