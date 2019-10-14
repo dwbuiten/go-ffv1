@@ -66,6 +66,8 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 		ret.Buf[3] = make([]byte, int(d.width*d.height))
 	}
 
+	d.current_frame.keyframe = isKeyframe(frame)
+
 	err := d.parseFooters(frame, &d.current_frame)
 	if err != nil {
 		return nil, fmt.Errorf("invalid frame footer: %s", err.Error())

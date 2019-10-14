@@ -75,7 +75,16 @@ func (d *Decoder) parseFooters(buf []byte, header *internalFrame) error {
 		return fmt.Errorf("couldn't count slices: %s", err.Error())
 	}
 
-	header.slices = make([]slice, len(header.slice_info))
+	slices := make([]slice, len(header.slice_info))
+	if !header.keyframe {
+		if len(slices) != len(header.slices) {
+			return fmt.Errorf("inter frames must have the same number of slices as the preceding intra frame")
+		}
+		for i := 0; i < len(slices); i++ {
+			slices[i].state = header.slices[i].state
+		}
+	}
+	header.slices = slices
 
 	return nil
 }
@@ -193,13 +202,27 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, si *sliceInfo, s *slic
 	}
 }
 
+func isKeyframe(buf []byte) bool {
+	state := make([]uint8, ContextSize)
+	for i := 0; i < ContextSize; i++ {
+		state[i] = 128
+	}
+
+	c := rangecoder.NewCoder(buf)
+
+	return c.BR(state)
+}
+
 func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, frame *Frame) error {
-	header.slices[slicenum].state = make([][][]uint8, len(d.initial_states))
-	for i := 0; i < len(d.initial_states); i++ {
-		header.slices[slicenum].state[i] = make([][]uint8, len(d.initial_states[i]))
-		for j := 0; j < len(d.initial_states[i]); j++ {
-			header.slices[slicenum].state[i][j] = make([]uint8, len(d.initial_states[i][j]))
-			copy(header.slices[slicenum].state[i][j], d.initial_states[i][j])
+	// If this is a keyframe, refresh states.
+	if header.keyframe {
+		header.slices[slicenum].state = make([][][]uint8, len(d.initial_states))
+		for i := 0; i < len(d.initial_states); i++ {
+			header.slices[slicenum].state[i] = make([][]uint8, len(d.initial_states[i]))
+			for j := 0; j < len(d.initial_states[i]); j++ {
+				header.slices[slicenum].state[i][j] = make([]uint8, len(d.initial_states[i][j]))
+				copy(header.slices[slicenum].state[i][j], d.initial_states[i][j])
+			}
 		}
 	}
 
@@ -210,9 +233,9 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 		state[i] = 128
 	}
 
-	// TODO: check outside slice stuff for threading reasons
+	// Skip keyframe bit on slice 0
 	if slicenum == 0 {
-		header.keyframe = c.BR(state)
+		c.BR(state)
 	}
 
 	if d.record.coder_type == 2 { // Custom state transition table
