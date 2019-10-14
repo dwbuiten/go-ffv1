@@ -93,26 +93,20 @@ func getContext(quant_tables [5][256]int16, T int, L int, t int, l int, tr int, 
 		int32(quant_tables[4][(T-t)&255])
 }
 
-func getMedian(a int, b int, c int) int {
+func min(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a int, b int) int {
 	if a > b {
-		if b > c {
-			return b
-		}
-
-		if c > a {
-			return a
-		}
-
-		return c
+		return a
 	}
+	return b
+}
 
-	if c > b {
-		return b
-	}
-
-	if c > a {
-		return c
-	}
-
-	return a
+func getMedian(a int, b int, c int) int {
+	return a + b + c - min(a, min(b, c)) - max(a, max(b, c))
 }
