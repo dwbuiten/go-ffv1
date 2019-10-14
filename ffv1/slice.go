@@ -48,6 +48,7 @@ func countSlices(buf []byte, header *internalFrame, ec bool) error {
 	// so we can derive the slice positions within the packet, and
 	// allow multithreading.
 	endPos := len(buf)
+	header.slice_info = nil
 	for endPos > 0 {
 		var info sliceInfo
 
