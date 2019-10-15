@@ -1,27 +1,16 @@
 package golomb
 
-import (
-	"bytes"
-)
-
 type bitReader struct {
-	r         *bytes.Reader
+	buf       []byte
+	pos       int
 	bitBuf    uint32
 	bitsInBuf uint32
 }
 
-func newBitReader(buffer []byte) (r *bitReader) {
-	reader := bytes.NewReader(buffer)
-	r = &bitReader{r: reader}
-	return
-}
-
-func (r *bitReader) readByte() (result uint8) {
-	result, err := r.r.ReadByte()
-	if err != nil {
-		panic("wtf read error will go away" + err.Error())
-	}
-	return result
+func newBitReader(buf []byte) (r *bitReader) {
+	ret := new(bitReader)
+	ret.buf = buf
+	return ret
 }
 
 func (r *bitReader) u(count uint32) (result uint32) {
@@ -30,8 +19,9 @@ func (r *bitReader) u(count uint32) (result uint32) {
 	}
 	for count > r.bitsInBuf {
 		r.bitBuf <<= 8
-		r.bitBuf |= uint32(r.readByte())
+		r.bitBuf |= uint32(r.buf[r.pos])
 		r.bitsInBuf += 8
+		r.pos++
 
 		if r.bitsInBuf > 24 {
 			if count <= r.bitsInBuf {
