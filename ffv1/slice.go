@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/dwbuiten/go-ffv1/ffv1/golomb"
 	"github.com/dwbuiten/go-ffv1/ffv1/rangecoder"
 )
 
@@ -19,12 +20,13 @@ type sliceInfo struct {
 }
 
 type slice struct {
-	header  sliceHeader
-	start_x uint32
-	start_y uint32
-	width   uint32
-	height  uint32
-	state   [][][]uint8
+	header       sliceHeader
+	start_x      uint32
+	start_y      uint32
+	width        uint32
+	height       uint32
+	state        [][][]uint8
+	golomb_state [][]golomb.State
 }
 
 type sliceHeader struct {
@@ -125,7 +127,7 @@ func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
 	s.height = ((s.header.slice_y + s.header.slice_height_minus1 + 1) * d.height / (uint32(d.record.num_v_slices_minus1) + 1)) - s.start_y
 }
 
-func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, si *sliceInfo, s *slice, frame *Frame) {
+func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *sliceInfo, s *slice, frame *Frame) {
 	if d.record.colorspace_type != 0 {
 		panic("only YCbCr support")
 	}
@@ -168,8 +170,16 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, si *sliceInfo, s *slic
 			quant_table = 1
 		}
 
+		// 3.8.2.2.1. Run Length Coding
+		if gc != nil {
+			gc.NewPlane(uint32(plane_pixel_width))
+		}
+
 		for y := 0; y < plane_pixel_height; y++ {
 			// Line()
+			if gc != nil {
+				gc.NewLine()
+			}
 			for x := 0; x < plane_pixel_width; x++ {
 				var sign bool
 
@@ -185,9 +195,13 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, si *sliceInfo, s *slic
 				} else {
 					sign = false
 				}
-
 				//TODO: golomb mode
-				diff := c.SR(s.state[quant_table][context])
+				var diff int32
+				if gc != nil {
+					diff = gc.SG(context, &s.golomb_state[quant_table][context])
+				} else {
+					diff = c.SR(s.state[quant_table][context])
+				}
 
 				if sign {
 					diff = -diff
@@ -216,12 +230,24 @@ func isKeyframe(buf []byte) bool {
 func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, frame *Frame) error {
 	// If this is a keyframe, refresh states.
 	if header.keyframe {
+		// Range coder states
 		header.slices[slicenum].state = make([][][]uint8, len(d.initial_states))
 		for i := 0; i < len(d.initial_states); i++ {
 			header.slices[slicenum].state[i] = make([][]uint8, len(d.initial_states[i]))
 			for j := 0; j < len(d.initial_states[i]); j++ {
 				header.slices[slicenum].state[i][j] = make([]uint8, len(d.initial_states[i][j]))
 				copy(header.slices[slicenum].state[i][j], d.initial_states[i][j])
+			}
+		}
+
+		// Golomb-Rice Code states
+		if d.record.coder_type == 0 {
+			header.slices[slicenum].golomb_state = make([][]golomb.State, d.record.quant_table_set_count)
+			for i := 0; i < len(header.slices[slicenum].golomb_state); i++ {
+				header.slices[slicenum].golomb_state[i] = make([]golomb.State, d.record.context_count[i])
+				for j := 0; j < len(header.slices[slicenum].golomb_state[i]); j++ {
+					header.slices[slicenum].golomb_state[i][j] = golomb.NewState()
+				}
 			}
 		}
 	}
@@ -244,12 +270,14 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 
 	d.parseSliceHeader(c, &header.slices[slicenum])
 
-	if d.record.coder_type != 1 && d.record.coder_type != 2 {
-		panic("golomb not implemented yet")
+	var gc *golomb.Coder
+	if d.record.coder_type == 0 {
+		c.SentinalEnd() // We're switching to Golomb-Rice mode now
+		offset := c.GetPos() - 1
+		gc = golomb.NewCoder(buf[header.slice_info[slicenum].pos+offset:])
 	}
 
-	//TODO: Coder types!
-	d.decodeSliceContent(c, &header.slice_info[slicenum], &header.slices[slicenum], frame)
+	d.decodeSliceContent(c, gc, &header.slice_info[slicenum], &header.slices[slicenum], frame)
 
 	return nil
 }

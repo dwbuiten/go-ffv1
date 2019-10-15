@@ -103,3 +103,17 @@ func (c *Coder) SetTable(table [256]uint8) {
 		c.zero_state[i] = uint8(uint16(256) - uint16(c.one_state[256-i]))
 	}
 }
+
+// 3.8.1.1.1. Termination
+//     - Sentinal Mode
+func (c *Coder) SentinalEnd() {
+	state := uint8(129)
+	c.get(&state)
+}
+
+func (c *Coder) GetPos() int {
+	if c.rng < 0x100 {
+		return c.pos - 1
+	}
+	return c.pos
+}
