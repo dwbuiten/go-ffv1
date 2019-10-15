@@ -85,6 +85,11 @@ func (d *Decoder) parseFooters(buf []byte, header *internalFrame) error {
 		for i := 0; i < len(slices); i++ {
 			slices[i].state = header.slices[i].state
 		}
+		if d.record.coder_type == 0 {
+			for i := 0; i < len(slices); i++ {
+				slices[i].golomb_state = header.slices[i].golomb_state
+			}
+		}
 	}
 	header.slices = slices
 
