@@ -97,8 +97,8 @@ func (d *Decoder) parseFooters(buf []byte, header *internalFrame) error {
 }
 
 func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
-	slice_state := make([]uint8, ContextSize)
-	for i := 0; i < ContextSize; i++ {
+	slice_state := make([]uint8, contextSize)
+	for i := 0; i < contextSize; i++ {
 		slice_state[i] = 128
 	}
 
@@ -133,10 +133,6 @@ func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
 }
 
 func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *sliceInfo, s *slice, frame *Frame) {
-	if d.record.colorspace_type != 0 {
-		panic("only YCbCr support")
-	}
-
 	primary_color_count := 1
 	chroma_planes := 0
 	if d.record.chroma_planes {
@@ -237,8 +233,8 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 }
 
 func isKeyframe(buf []byte) bool {
-	state := make([]uint8, ContextSize)
-	for i := 0; i < ContextSize; i++ {
+	state := make([]uint8, contextSize)
+	for i := 0; i < contextSize; i++ {
 		state[i] = 128
 	}
 
@@ -274,8 +270,8 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 
 	c := rangecoder.NewCoder(buf[header.slice_info[slicenum].pos:])
 
-	state := make([]uint8, ContextSize)
-	for i := 0; i < ContextSize; i++ {
+	state := make([]uint8, contextSize)
+	for i := 0; i < contextSize; i++ {
 		state[i] = 128
 	}
 

@@ -20,8 +20,8 @@ type configRecord struct {
 	num_h_slices_minus1     uint8
 	num_v_slices_minus1     uint8
 	quant_table_set_count   uint8
-	context_count           [MaxQuantTables]int32
-	quant_tables            [MaxQuantTables][MaxContextInputs][256]int16
+	context_count           [maxQuantTables]int32
+	quant_tables            [maxQuantTables][maxContextInputs][256]int16
 	states_coded            bool
 	initial_state_delta     [][][]int16
 	ec                      uint8
@@ -31,8 +31,8 @@ type configRecord struct {
 func parseConfigRecord(buf []byte, record *configRecord) error {
 	c := rangecoder.NewCoder(buf)
 
-	state := make([]uint8, ContextSize)
-	for i := 0; i < ContextSize; i++ {
+	state := make([]uint8, contextSize)
+	for i := 0; i < contextSize; i++ {
 		state[i] = 128
 	}
 
@@ -92,16 +92,16 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 	record.quant_table_set_count = uint8(c.UR(state))
 	if record.quant_table_set_count == 0 {
 		return fmt.Errorf("quant_table_set_count may not be zero")
-	} else if record.quant_table_set_count > MaxQuantTables {
-		return fmt.Errorf("too many quant tables: %d > %d", record.quant_table_set_count, MaxQuantTables)
+	} else if record.quant_table_set_count > maxQuantTables {
+		return fmt.Errorf("too many quant tables: %d > %d", record.quant_table_set_count, maxQuantTables)
 	}
 
 	for i := 0; i < int(record.quant_table_set_count); i++ {
 		scale := 1
-		for j := 0; j < MaxContextInputs; j++ {
+		for j := 0; j < maxContextInputs; j++ {
 			// Each table has its own state table.
-			quant_state := make([]byte, ContextSize)
-			for qs := 0; qs < ContextSize; qs++ {
+			quant_state := make([]byte, contextSize)
+			for qs := 0; qs < contextSize; qs++ {
 				quant_state[qs] = 128
 			}
 			v := 0
@@ -128,12 +128,12 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 	for i := 0; i < int(record.quant_table_set_count); i++ {
 		record.initial_state_delta[i] = make([][]int16, int(record.context_count[i]))
 		for j := 0; j < int(record.context_count[i]); j++ {
-			record.initial_state_delta[i][j] = make([]int16, ContextSize)
+			record.initial_state_delta[i][j] = make([]int16, contextSize)
 		}
 		states_coded := c.BR(state)
 		if states_coded {
 			for j := 0; j < int(record.context_count[i]); j++ {
-				for k := 0; k < ContextSize; k++ {
+				for k := 0; k < contextSize; k++ {
 					record.initial_state_delta[i][j][k] = int16(c.SR(state))
 				}
 			}
