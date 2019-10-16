@@ -8,13 +8,15 @@ func deriveBorders(plane []uint8, x int, y int, width int, height int, stride in
 	var tr int
 	var tl int
 
+	pos := y*stride + x
+
 	// This is really slow and stupid but matches the spec exactly.
 
 	// T
 	if y == 0 || y == 1 {
 		T = 0
 	} else {
-		T = int(plane[(y*stride+x)-(2*stride)])
+		T = int(plane[pos-(2*stride)])
 	}
 
 	// L
@@ -22,15 +24,15 @@ func deriveBorders(plane []uint8, x int, y int, width int, height int, stride in
 		if x == 0 || x == 1 {
 			L = 0
 		} else {
-			L = int(plane[(y*stride+x)-2])
+			L = int(plane[pos-2])
 		}
 	} else {
 		if x == 0 {
 			L = 0
 		} else if x == 1 {
-			L = int(plane[(y*stride+x)-(1*stride)-1])
+			L = int(plane[pos-(1*stride)-1])
 		} else {
-			L = int(plane[(y*stride+x)-2])
+			L = int(plane[pos-2])
 		}
 	}
 
@@ -38,7 +40,7 @@ func deriveBorders(plane []uint8, x int, y int, width int, height int, stride in
 	if y == 0 {
 		t = 0
 	} else {
-		t = int(plane[(y*stride+x)-(1*stride)])
+		t = int(plane[pos-(1*stride)])
 	}
 
 	// l
@@ -46,13 +48,13 @@ func deriveBorders(plane []uint8, x int, y int, width int, height int, stride in
 		if x == 0 {
 			l = 0
 		} else {
-			l = int(plane[(y*stride+x)-1])
+			l = int(plane[pos-1])
 		}
 	} else {
 		if x == 0 {
-			l = int(plane[(y*stride+x)-(1*stride)])
+			l = int(plane[pos-(1*stride)])
 		} else {
-			l = int(plane[(y*stride+x)-1])
+			l = int(plane[pos-1])
 		}
 	}
 
@@ -64,10 +66,10 @@ func deriveBorders(plane []uint8, x int, y int, width int, height int, stride in
 			if y == 1 {
 				tl = 0
 			} else {
-				tl = int(plane[(y*stride+x)-(2*stride)])
+				tl = int(plane[pos-(2*stride)])
 			}
 		} else {
-			tl = int(plane[(y*stride+x)-(1*stride)-1])
+			tl = int(plane[pos-(1*stride)-1])
 		}
 	}
 
@@ -76,9 +78,9 @@ func deriveBorders(plane []uint8, x int, y int, width int, height int, stride in
 		tr = 0
 	} else {
 		if x == width-1 {
-			tr = int(plane[(y*stride+x)-(1*stride)])
+			tr = int(plane[pos-(1*stride)])
 		} else {
-			tr = int(plane[(y*stride+x)-(1*stride)+1])
+			tr = int(plane[pos-(1*stride)+1])
 		}
 	}
 
