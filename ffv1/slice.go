@@ -200,7 +200,7 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 				} else {
 					sign = false
 				}
-				//TODO: golomb mode
+
 				var diff int32
 				if gc != nil {
 					diff = gc.SG(context, &s.golomb_state[quant_table][context])
