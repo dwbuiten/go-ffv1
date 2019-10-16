@@ -15,11 +15,16 @@ type Decoder struct {
 }
 
 type Frame struct {
-	Buf      [][]byte
-	Buf16    [][]uint16
-	BitDepth uint8
-	Width    uint32
-	Height   uint32
+	Buf              [][]byte
+	Buf16            [][]uint16
+	Width            uint32
+	Height           uint32
+	BitDepth         uint8
+	ColorSpace       int
+	HasChroma        bool
+	HasAlpha         bool
+	ChromaSubsampleV uint8
+	ChromaSubsampleH uint8
 }
 
 func NewDecoder(record []byte, width uint32, height uint32) (*Decoder, error) {
@@ -43,10 +48,19 @@ func NewDecoder(record []byte, width uint32, height uint32) (*Decoder, error) {
 }
 
 func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
+
+	// Allocate and fill frame info
 	ret := new(Frame)
 	ret.Width = d.width
 	ret.Height = d.height
 	ret.BitDepth = d.record.bits_per_raw_sample
+	ret.ColorSpace = int(d.record.colorspace_type)
+	ret.HasChroma = d.record.chroma_planes
+	ret.HasAlpha = d.record.extra_plane
+	if ret.HasChroma {
+		ret.ChromaSubsampleV = d.record.log2_v_chroma_subsample
+		ret.ChromaSubsampleH = d.record.log2_h_chroma_subsample
+	}
 
 	numPlanes := 1
 	if d.record.chroma_planes {
