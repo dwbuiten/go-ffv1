@@ -93,13 +93,9 @@ func (c *Coder) SG(context int32, state *State) int32 {
 	}
 }
 
-func sign_extend(n int32, bits uint8) int32 {
-	if bits == 8 {
-		ret := int8(n) + 0
-		return int32(ret)
-	} else {
-		panic("no high bit depth golomb")
-	}
+func sign_extend(n int32) int32 {
+	ret := int8(n)
+	return int32(ret)
 }
 
 func (c *Coder) get_vlc_symbol(state *State) int32 {
@@ -111,15 +107,13 @@ func (c *Coder) get_vlc_symbol(state *State) int32 {
 		i += i
 	}
 
-	// TODO: High bit depth
-	v := c.get_sr_golomb(k, 8)
+	v := c.get_sr_golomb(k)
 
 	if 2*state.drift < -state.count {
 		v = -1 - v
 	}
 
-	//TODO: High bit depth
-	ret := sign_extend(v+state.bias, 8)
+	ret := sign_extend(v + state.bias)
 
 	state.error_sum += abs32(v)
 	state.drift += v
@@ -141,8 +135,8 @@ func (c *Coder) get_vlc_symbol(state *State) int32 {
 	return ret
 }
 
-func (c *Coder) get_sr_golomb(k uint32, bits uint32) int32 {
-	v := c.get_ur_golomb(k, bits)
+func (c *Coder) get_sr_golomb(k uint32) int32 {
+	v := c.get_ur_golomb(k)
 	if v&1 == 1 {
 		return -(v >> 1) - 1
 	} else {
@@ -150,11 +144,11 @@ func (c *Coder) get_sr_golomb(k uint32, bits uint32) int32 {
 	}
 }
 
-func (c *Coder) get_ur_golomb(k uint32, bits uint32) int32 {
+func (c *Coder) get_ur_golomb(k uint32) int32 {
 	for prefix := 0; prefix < 12; prefix++ {
 		if c.r.u(1) == 1 {
 			return int32(c.r.u(k)) + int32((prefix << k))
 		}
 	}
-	return int32(c.r.u(bits)) + 11
+	return int32(c.r.u(8)) + 11
 }
