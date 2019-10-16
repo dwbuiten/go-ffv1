@@ -66,8 +66,8 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 	if record.bits_per_raw_sample == 0 {
 		record.bits_per_raw_sample = 8
 	}
-	if record.bits_per_raw_sample != 8 {
-		panic("high bit depth not implemented yet!")
+	if record.coder_type == 0 && record.bits_per_raw_sample != 8 {
+		return fmt.Errorf("golomb-rice mode cannot have >8bit per sample")
 	}
 
 	record.chroma_planes = c.BR(state)

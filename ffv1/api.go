@@ -15,9 +15,11 @@ type Decoder struct {
 }
 
 type Frame struct {
-	Buf    [][]byte
-	Width  uint32
-	Height uint32
+	Buf      [][]byte
+	Buf16    [][]uint16
+	BitDepth uint8
+	Width    uint32
+	Height   uint32
 }
 
 func NewDecoder(record []byte, width uint32, height uint32) (*Decoder, error) {
@@ -44,6 +46,7 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 	ret := new(Frame)
 	ret.Width = d.width
 	ret.Height = d.height
+	ret.BitDepth = d.record.bits_per_raw_sample
 
 	numPlanes := 1
 	if d.record.chroma_planes {
@@ -54,16 +57,30 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 	}
 
 	// Hideous and temporary.
-	ret.Buf = make([][]byte, numPlanes)
-	ret.Buf[0] = make([]byte, int(d.width*d.height))
-	if d.record.chroma_planes {
-		chromaWidth := d.width >> d.record.log2_h_chroma_subsample
-		chromaHeight := d.height >> d.record.log2_v_chroma_subsample
-		ret.Buf[1] = make([]byte, int(chromaWidth*chromaHeight))
-		ret.Buf[2] = make([]byte, int(chromaWidth*chromaHeight))
-	}
-	if d.record.extra_plane {
-		ret.Buf[3] = make([]byte, int(d.width*d.height))
+	if d.record.bits_per_raw_sample == 8 {
+		ret.Buf = make([][]byte, numPlanes)
+		ret.Buf[0] = make([]byte, int(d.width*d.height))
+		if d.record.chroma_planes {
+			chromaWidth := d.width >> d.record.log2_h_chroma_subsample
+			chromaHeight := d.height >> d.record.log2_v_chroma_subsample
+			ret.Buf[1] = make([]byte, int(chromaWidth*chromaHeight))
+			ret.Buf[2] = make([]byte, int(chromaWidth*chromaHeight))
+		}
+		if d.record.extra_plane {
+			ret.Buf[3] = make([]byte, int(d.width*d.height))
+		}
+	} else {
+		ret.Buf16 = make([][]uint16, numPlanes)
+		ret.Buf16[0] = make([]uint16, int(d.width*d.height))
+		if d.record.chroma_planes {
+			chromaWidth := d.width >> d.record.log2_h_chroma_subsample
+			chromaHeight := d.height >> d.record.log2_v_chroma_subsample
+			ret.Buf16[1] = make([]uint16, int(chromaWidth*chromaHeight))
+			ret.Buf16[2] = make([]uint16, int(chromaWidth*chromaHeight))
+		}
+		if d.record.extra_plane {
+			ret.Buf16[3] = make([]uint16, int(d.width*d.height))
+		}
 	}
 
 	d.current_frame.keyframe = isKeyframe(frame)

@@ -188,10 +188,21 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 			for x := 0; x < plane_pixel_width; x++ {
 				var sign bool
 
-				buf := frame.Buf[p][start_y*plane_pixel_stride+start_x:]
+				var buf []byte
+				var buf16 []uint16
+				if d.record.bits_per_raw_sample == 8 {
+					buf = frame.Buf[p][start_y*plane_pixel_stride+start_x:]
+				} else {
+					buf16 = frame.Buf16[p][start_y*plane_pixel_stride+start_x:]
+				}
 
 				// Derive neighbours
-				T, L, t, l, tr, tl := deriveBorders(buf, x, y, plane_pixel_width, plane_pixel_height, plane_pixel_stride)
+				var T, L, t, l, tr, tl int
+				if d.record.bits_per_raw_sample == 8 {
+					T, L, t, l, tr, tl = deriveBorders(buf, x, y, plane_pixel_width, plane_pixel_height, plane_pixel_stride)
+				} else {
+					T, L, t, l, tr, tl = deriveBorders16(buf16, x, y, plane_pixel_width, plane_pixel_height, plane_pixel_stride)
+				}
 
 				context := getContext(d.record.quant_tables[s.header.quant_table_set_index[quant_table]], T, L, t, l, tr, tl)
 				if context < 0 {
@@ -215,7 +226,11 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 				val := diff + int32(getMedian(l, t, l+t-tl))
 				val = val & ((1 << d.record.bits_per_raw_sample) - 1) // Section 3.8
 
-				buf[(y*plane_pixel_stride)+x] = byte(val)
+				if d.record.bits_per_raw_sample == 8 {
+					buf[(y*plane_pixel_stride)+x] = byte(val)
+				} else {
+					buf16[(y*plane_pixel_stride)+x] = uint16(val)
+				}
 			}
 		}
 	}
