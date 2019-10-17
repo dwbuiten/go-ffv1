@@ -117,7 +117,7 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 	wg.Wait()
 	for i, err := range errs {
 		if err != nil {
-			return nil, fmt.Errorf("slice %s failed: %s", i, err.Error())
+			return nil, fmt.Errorf("slice %d failed: %s", i, err.Error())
 		}
 	}
 
