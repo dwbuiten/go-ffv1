@@ -15,8 +15,9 @@ type internalFrame struct {
 }
 
 type sliceInfo struct {
-	pos  int
-	size uint32
+	pos          int
+	size         uint32
+	error_status uint8
 }
 
 type slice struct {
@@ -59,6 +60,7 @@ func countSlices(buf []byte, header *internalFrame, ec bool) error {
 		size |= uint32(buf[endPos-footerSize+2])
 
 		info.size = size
+		info.error_status = uint8(buf[endPos-footerSize+3])
 		info.pos = endPos - int(size) - footerSize
 		header.slice_info = append([]sliceInfo{info}, header.slice_info...) //prepend
 		endPos = info.pos
@@ -244,6 +246,19 @@ func isKeyframe(buf []byte) bool {
 }
 
 func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, frame *Frame) error {
+	// Before we do anything, let's try and check the integrity
+	if d.record.ec == 1 {
+		if header.slice_info[slicenum].error_status != 0 {
+			return fmt.Errorf("error_status is non-zero: %d", header.slice_info[slicenum].error_status)
+		}
+
+		sliceBuf := buf[header.slice_info[slicenum].pos:]
+		sliceBuf = sliceBuf[:header.slice_info[slicenum].size+8] // 8 bytes for footer size
+		if crc32MPEG2(sliceBuf) != 0 {
+			return fmt.Errorf("CRC mismatch")
+		}
+	}
+
 	// If this is a keyframe, refresh states.
 	if header.keyframe {
 		// Range coder states

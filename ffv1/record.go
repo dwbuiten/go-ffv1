@@ -29,6 +29,10 @@ type configRecord struct {
 }
 
 func parseConfigRecord(buf []byte, record *configRecord) error {
+	// Before we do anything, CRC check.
+	if crc32MPEG2(buf) != 0 {
+		return fmt.Errorf("failed CRC check for configuration record")
+	}
 	c := rangecoder.NewCoder(buf)
 
 	state := make([]uint8, contextSize)
