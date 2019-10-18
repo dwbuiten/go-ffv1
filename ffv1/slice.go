@@ -245,6 +245,29 @@ func isKeyframe(buf []byte) bool {
 	return c.BR(state)
 }
 
+func (d *Decoder) resetSliceStates(s *slice) {
+	// Range coder states
+	s.state = make([][][]uint8, len(d.initial_states))
+	for i := 0; i < len(d.initial_states); i++ {
+		s.state[i] = make([][]uint8, len(d.initial_states[i]))
+		for j := 0; j < len(d.initial_states[i]); j++ {
+			s.state[i][j] = make([]uint8, len(d.initial_states[i][j]))
+			copy(s.state[i][j], d.initial_states[i][j])
+		}
+	}
+
+	// Golomb-Rice Code states
+	if d.record.coder_type == 0 {
+		s.golomb_state = make([][]golomb.State, d.record.quant_table_set_count)
+		for i := 0; i < len(s.golomb_state); i++ {
+			s.golomb_state[i] = make([]golomb.State, d.record.context_count[i])
+			for j := 0; j < len(s.golomb_state[i]); j++ {
+				s.golomb_state[i][j] = golomb.NewState()
+			}
+		}
+	}
+}
+
 func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, frame *Frame) error {
 	// Before we do anything, let's try and check the integrity
 	if d.record.ec == 1 {
@@ -261,26 +284,7 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 
 	// If this is a keyframe, refresh states.
 	if header.keyframe {
-		// Range coder states
-		header.slices[slicenum].state = make([][][]uint8, len(d.initial_states))
-		for i := 0; i < len(d.initial_states); i++ {
-			header.slices[slicenum].state[i] = make([][]uint8, len(d.initial_states[i]))
-			for j := 0; j < len(d.initial_states[i]); j++ {
-				header.slices[slicenum].state[i][j] = make([]uint8, len(d.initial_states[i][j]))
-				copy(header.slices[slicenum].state[i][j], d.initial_states[i][j])
-			}
-		}
-
-		// Golomb-Rice Code states
-		if d.record.coder_type == 0 {
-			header.slices[slicenum].golomb_state = make([][]golomb.State, d.record.quant_table_set_count)
-			for i := 0; i < len(header.slices[slicenum].golomb_state); i++ {
-				header.slices[slicenum].golomb_state[i] = make([]golomb.State, d.record.context_count[i])
-				for j := 0; j < len(header.slices[slicenum].golomb_state[i]); j++ {
-					header.slices[slicenum].golomb_state[i][j] = golomb.NewState()
-				}
-			}
-		}
+		d.resetSliceStates(&header.slices[slicenum])
 	}
 
 	c := rangecoder.NewCoder(buf[header.slice_info[slicenum].pos:])
