@@ -1,5 +1,9 @@
 #!/usr/bin/env perl
 
+# Simple code gen tool to make a 16 bit person of deriveBorders.
+# In theory, I could have just used an interface, but that's just
+# ugly in a different way.
+
 use strict;
 use warnings;
 

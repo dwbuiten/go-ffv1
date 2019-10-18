@@ -41,6 +41,10 @@ type sliceHeader struct {
 	sar_den               uint32
 }
 
+// Counts the number of slices in a frame, as described in
+// 9.1.1. Multi-threading Support and Independence of Slices.
+//
+// See: 4.8. Slice Footer
 func countSlices(buf []byte, header *internalFrame, ec bool) error {
 	footerSize := 3
 	if ec {
@@ -55,12 +59,15 @@ func countSlices(buf []byte, header *internalFrame, ec bool) error {
 	for endPos > 0 {
 		var info sliceInfo
 
+		// 4.8.1. slice_size
 		size := uint32(buf[endPos-footerSize]) << 16
 		size |= uint32(buf[endPos-footerSize+1]) << 8
 		size |= uint32(buf[endPos-footerSize+2])
-
 		info.size = size
+
+		// 4.8.2. error_status
 		info.error_status = uint8(buf[endPos-footerSize+3])
+
 		info.pos = endPos - int(size) - footerSize
 		header.slice_info = append([]sliceInfo{info}, header.slice_info...) //prepend
 		endPos = info.pos
@@ -73,6 +80,11 @@ func countSlices(buf []byte, header *internalFrame, ec bool) error {
 	return nil
 }
 
+// Parses all footers in a frame and allocates any necessary slice structures.
+//
+// See: * 9.1.1. Multi-threading Support and Independence of Slices
+//      * 3.8.1.3. Initial Values for the Context Model
+//      * 3.8.2.4. Initial Values for the VLC context state
 func (d *Decoder) parseFooters(buf []byte, header *internalFrame) error {
 	err := countSlices(buf, header, d.record.ec != 0)
 	if err != nil {
@@ -98,17 +110,26 @@ func (d *Decoder) parseFooters(buf []byte, header *internalFrame) error {
 	return nil
 }
 
+// Parses a slice's header.
+//
+// See: 4.5. Slice Header
 func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
+	// 4. Bitstream
 	slice_state := make([]uint8, contextSize)
 	for i := 0; i < contextSize; i++ {
 		slice_state[i] = 128
 	}
 
+	// 4.5.1. slice_x
 	s.header.slice_x = c.UR(slice_state)
+	// 4.5.2. slice_y
 	s.header.slice_y = c.UR(slice_state)
+	// 4.5.3 slice_width
 	s.header.slice_width_minus1 = c.UR(slice_state)
+	// 4.5.4 slice_height
 	s.header.slice_height_minus1 = c.UR(slice_state)
 
+	// 4.5.5. quant_table_set_index_count
 	quant_table_set_index_count := 1
 	if d.record.chroma_planes {
 		quant_table_set_index_count++
@@ -117,24 +138,41 @@ func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
 		quant_table_set_index_count++
 	}
 
+	// 4.5.6. quant_table_set_index
 	s.header.quant_table_set_index = make([]uint8, quant_table_set_index_count)
-
 	for i := 0; i < quant_table_set_index_count; i++ {
 		s.header.quant_table_set_index[i] = uint8(c.UR(slice_state))
 	}
 
+	// 4.5.7. picture_structure
 	s.header.picture_structure = uint8(c.UR(slice_state))
+
+	// It's really weird for slices within the same frame to code
+	// their own SAR values...
+	//
+	// See: * 4.5.8. sar_num
+	//      * 4.5.9. sar_den
 	s.header.sar_num = c.UR(slice_state)
 	s.header.sar_den = c.UR(slice_state)
 
 	// Calculate bounaries for easy use elsewhere
+	//
+	// See: * 4.6.3. slice_pixel_height
+	//      * 4.6.4. slice_pixel_y
+	//      * 4.7.2. slice_pixel_width
+	//      * 4.7.3. slice_pixel_x
 	s.start_x = s.header.slice_x * d.width / (uint32(d.record.num_h_slices_minus1) + 1)
 	s.start_y = s.header.slice_y * d.height / (uint32(d.record.num_v_slices_minus1) + 1)
 	s.width = ((s.header.slice_x + s.header.slice_width_minus1 + 1) * d.width / (uint32(d.record.num_h_slices_minus1) + 1)) - s.start_x
 	s.height = ((s.header.slice_y + s.header.slice_height_minus1 + 1) * d.height / (uint32(d.record.num_v_slices_minus1) + 1)) - s.start_y
 }
 
+// Decoding happens here.
+//
+// See: * 4.6. Slice Content
+//      * 4.7. Line
 func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *sliceInfo, s *slice, frame *Frame) {
+	// 4.6.1. primary_color_count
 	primary_color_count := 1
 	chroma_planes := 0
 	if d.record.chroma_planes {
@@ -152,6 +190,9 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 		var start_x int
 		var start_y int
 		var quant_table int
+
+		// See: * 4.6.2. plane_pixel_height
+		//      * 4.7.1. plane_pixel_width
 		if p == 0 || p == 1+chroma_planes {
 			plane_pixel_height = int(s.height)
 			plane_pixel_width = int(s.width)
@@ -179,10 +220,16 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 		}
 
 		for y := 0; y < plane_pixel_height; y++ {
-			// Line()
+			// 4.7. Line
+
+			// Runs are horizontal and thus cannot run more than a line.
+			//
+			// See: 3.8.2.2.1. Run Length Coding
 			if gc != nil {
 				gc.NewLine()
 			}
+
+			// 4.7.4. sample_difference
 			for x := 0; x < plane_pixel_width; x++ {
 				var sign bool
 
@@ -195,6 +242,8 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 				}
 
 				// Derive neighbours
+				//
+				// See pred.go for details.
 				var T, L, t, l, tr, tl int
 				if d.record.bits_per_raw_sample == 8 {
 					T, L, t, l, tr, tl = deriveBorders(buf, x, y, plane_pixel_width, plane_pixel_height, plane_pixel_stride)
@@ -202,6 +251,10 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 					T, L, t, l, tr, tl = deriveBorders16(buf16, x, y, plane_pixel_width, plane_pixel_height, plane_pixel_stride)
 				}
 
+				// See pred.go for details.
+				//
+				// See also: * 3.4. Context
+				//           * 3.6. Quantization Table Set Indexes
 				context := getContext(d.record.quant_tables[s.header.quant_table_set_index[quant_table]], T, L, t, l, tr, tl)
 				if context < 0 {
 					context = -context
@@ -217,12 +270,14 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 					diff = c.SR(s.state[quant_table][context])
 				}
 
+				// 3.4. Context
 				if sign {
 					diff = -diff
 				}
 
+				// 3.8. Coding of the Sample Difference
 				val := diff + int32(getMedian(l, t, l+t-tl))
-				val = val & ((1 << d.record.bits_per_raw_sample) - 1) // Section 3.8
+				val = val & ((1 << d.record.bits_per_raw_sample) - 1)
 
 				if d.record.bits_per_raw_sample == 8 {
 					buf[(y*plane_pixel_stride)+x] = byte(val)
@@ -234,7 +289,11 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 	}
 }
 
+// Determines whether a given frame is a keyframe.
+//
+// See: 4.3. Frame
 func isKeyframe(buf []byte) bool {
+	// 4. Bitstream
 	state := make([]uint8, contextSize)
 	for i := 0; i < contextSize; i++ {
 		state[i] = 128
@@ -245,6 +304,7 @@ func isKeyframe(buf []byte) bool {
 	return c.BR(state)
 }
 
+// Resets the range coder and Golomb-Rice coder states.
 func (d *Decoder) resetSliceStates(s *slice) {
 	// Range coder states
 	s.state = make([][][]uint8, len(d.initial_states))
@@ -270,6 +330,9 @@ func (d *Decoder) resetSliceStates(s *slice) {
 
 func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, frame *Frame) error {
 	// Before we do anything, let's try and check the integrity
+	//
+	// See: * 4.8.2. error_status
+	//      * 4.8.3. slice_crc_parity
 	if d.record.ec == 1 {
 		if header.slice_info[slicenum].error_status != 0 {
 			return fmt.Errorf("error_status is non-zero: %d", header.slice_info[slicenum].error_status)
@@ -283,12 +346,16 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 	}
 
 	// If this is a keyframe, refresh states.
+	//
+	// See: * 3.8.1.3. Initial Values for the Context Model
+	//      * 3.8.2.4. Initial Values for the VLC context state
 	if header.keyframe {
 		d.resetSliceStates(&header.slices[slicenum])
 	}
 
 	c := rangecoder.NewCoder(buf[header.slice_info[slicenum].pos:])
 
+	// 4. Bitstream
 	state := make([]uint8, contextSize)
 	for i := 0; i < contextSize; i++ {
 		state[i] = 128
@@ -307,7 +374,11 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 
 	var gc *golomb.Coder
 	if d.record.coder_type == 0 {
-		c.SentinalEnd() // We're switching to Golomb-Rice mode now
+		// We're switching to Golomb-Rice mode now so we need the bitstream
+		// position.
+		//
+		// See: 3.8.1.1.1. Termination
+		c.SentinalEnd()
 		offset := c.GetPos() - 1
 		gc = golomb.NewCoder(buf[header.slice_info[slicenum].pos+offset:])
 	}

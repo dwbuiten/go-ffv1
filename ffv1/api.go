@@ -59,7 +59,7 @@ type Frame struct {
 //
 // 'record' is the codec private data provided by the container. For
 // Matroska, this is what is in CodecPrivate (adjusted for e.g. VFW
-// data that may be before it).
+// data that may be before it). For ISOBMFF, this is the 'glbl' box.
 //
 // 'width' and 'height' are the frame width and height provided by
 // the container.
@@ -137,8 +137,15 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 		}
 	}
 
+	// We parse the frame's keyframe info outside the slice decoding
+	// loop so we know ahead of time if each slice has to refresh its
+	// states or not. This allows easy slice threading.
 	d.current_frame.keyframe = isKeyframe(frame)
 
+	// We parse all the footers ahead of time too, for the same reason.
+	// It allows us to know all the slice positions and sizes.
+	//
+	// See: 9.1.1. Multi-threading Support and Independence of Slices
 	err := d.parseFooters(frame, &d.current_frame)
 	if err != nil {
 		return nil, fmt.Errorf("invalid frame footer: %s", err.Error())

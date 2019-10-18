@@ -13,7 +13,11 @@ func deriveBorders16(plane []uint16, x int, y int, width int, height int, stride
 
 	pos := y*stride + x
 
-	// This is really slow and stupid but matches the spec exactly.
+	// This is really slow and stupid but matches the spec exactly. Each of the
+	// neighbouring values has been left entirely separate, and none skipped,
+	// even if they could be.
+	//
+	// Please never implement an actual decoder this way.
 
 	// T
 	if y == 0 || y == 1 {

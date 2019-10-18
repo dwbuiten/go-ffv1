@@ -7,12 +7,14 @@ type bitReader struct {
 	bitsInBuf uint32
 }
 
+// Creates a new bitreader.
 func newBitReader(buf []byte) (r *bitReader) {
 	ret := new(bitReader)
 	ret.buf = buf
 	return ret
 }
 
+// Reads 'count' bits, up to 32.
 func (r *bitReader) u(count uint32) (result uint32) {
 	if count > 32 {
 		panic("WTF more than 32 bits")

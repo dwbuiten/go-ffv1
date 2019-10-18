@@ -53,6 +53,8 @@ var crc32table = &crc32.Table{
 
 // Go's CRC32 package always does pre- and post-inversion, so we have to compensate
 // for that here.
+//
+// See: 4.8.3. slice_crc_parity
 func crc32MPEG2(buf []byte) uint32 {
 	return ^crc32.Update(^uint32(0), crc32table, buf)
 }

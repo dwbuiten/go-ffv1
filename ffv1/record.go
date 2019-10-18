@@ -28,44 +28,57 @@ type configRecord struct {
 	intra                   uint8
 }
 
+// Parses the configuration record from the codec private data.
+//
+// See: * 4.1. Parameters
+//      * 4.2. Configuration Record
 func parseConfigRecord(buf []byte, record *configRecord) error {
 	// Before we do anything, CRC check.
+	//
+	// See: 4.2.2. configuration_record_crc_parity
 	if crc32MPEG2(buf) != 0 {
 		return fmt.Errorf("failed CRC check for configuration record")
 	}
 	c := rangecoder.NewCoder(buf)
 
+	// 4. Bitstream
 	state := make([]uint8, contextSize)
 	for i := 0; i < contextSize; i++ {
 		state[i] = 128
 	}
 
+	// 4.1.1. version
 	record.version = uint8(c.UR(state))
 	if record.version != 3 {
 		return fmt.Errorf("only FFV1 version 3 is supported")
 	}
 
+	// 4.1.2. micro_version
 	record.micro_version = uint8(c.UR(state))
 	if record.micro_version < 1 {
 		return fmt.Errorf("only FFV1 micro version >1 supported")
 	}
 
+	// 4.1.3. coder_type
 	record.coder_type = uint8(c.UR(state))
 	if record.coder_type > 2 {
 		return fmt.Errorf("invalid coder_type: %d", record.coder_type)
 	}
 
+	// 4.1.4. state_transition_delta
 	if record.coder_type > 1 {
 		for i := 1; i < 256; i++ {
 			record.state_transition_delta[i] = int16(c.SR(state))
 		}
 	}
 
+	// 4.1.5. colorspace_type
 	record.colorspace_type = uint8(c.UR(state))
 	if record.colorspace_type > 1 {
 		return fmt.Errorf("invalid colorspace_type: %d", record.colorspace_type)
 	}
 
+	// 4.1.7. bits_per_raw_sample
 	record.bits_per_raw_sample = uint8(c.UR(state))
 	if record.bits_per_raw_sample == 0 {
 		record.bits_per_raw_sample = 8
@@ -74,25 +87,32 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 		return fmt.Errorf("golomb-rice mode cannot have >8bit per sample")
 	}
 
+	// 4.1.6. chroma_planes
 	record.chroma_planes = c.BR(state)
 	if record.colorspace_type == 1 && !record.chroma_planes {
 		return fmt.Errorf("RGB must contain chroma planes")
 	}
 
+	// 4.1.8. log2_h_chroma_subsample
 	record.log2_h_chroma_subsample = uint8(c.UR(state))
 	if record.colorspace_type == 1 && record.log2_h_chroma_subsample != 0 {
 		return fmt.Errorf("RGB cannot be subsampled")
 	}
 
+	// 4.1.9. log2_v_chroma_subsample
 	record.log2_v_chroma_subsample = uint8(c.UR(state))
 	if record.colorspace_type == 1 && record.log2_v_chroma_subsample != 0 {
 		return fmt.Errorf("RGB cannot be subsampled")
 	}
 
+	// 4.1.10. extra_plane
 	record.extra_plane = c.BR(state)
+	// 4.1.11. num_h_slices
 	record.num_h_slices_minus1 = uint8(c.UR(state))
+	// 4.1.12. num_v_slices
 	record.num_v_slices_minus1 = uint8(c.UR(state))
 
+	// 4.1.13. quant_table_set_count
 	record.quant_table_set_count = uint8(c.UR(state))
 	if record.quant_table_set_count == 0 {
 		return fmt.Errorf("quant_table_set_count may not be zero")
@@ -101,6 +121,7 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 	}
 
 	for i := 0; i < int(record.quant_table_set_count); i++ {
+		// 4.9.  Quantization Table Set
 		scale := 1
 		for j := 0; j < maxContextInputs; j++ {
 			// Each table has its own state table.
@@ -144,12 +165,17 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 		}
 	}
 
+	// 4.1.16. ec
 	record.ec = uint8(c.UR(state))
+	// 4.1.17. intra
 	record.intra = uint8(c.UR(state))
 
 	return nil
 }
 
+// Initializes initial state for the range coder.
+//
+// See: 4.1.15. initial_state_delta
 func (d *Decoder) initializeStates() {
 	for i := 1; i < 256; i++ {
 		d.state_transition[i] = uint8(int16(rangecoder.DefaultStateTransition[i]) + d.record.state_transition_delta[i])

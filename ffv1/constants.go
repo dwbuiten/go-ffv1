@@ -2,9 +2,9 @@ package ffv1
 
 // Internal constants.
 const (
-	maxQuantTables   = 8 // Only defined in FFmpeg?
-	maxContextInputs = 5
-	contextSize      = 32
+	maxQuantTables   = 8  // Only defined in FFmpeg?
+	maxContextInputs = 5  // 4.9. Quantization Table Set
+	contextSize      = 32 // 4.1. Parameters
 )
 
 // API constants.
