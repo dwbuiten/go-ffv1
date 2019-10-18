@@ -1,3 +1,5 @@
+// Package ffv1 implements an FFV1 Version 3 decoder based off of
+// draft-ietf-cellar-ffv1.
 package ffv1
 
 import (
