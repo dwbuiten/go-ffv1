@@ -5,6 +5,7 @@ import (
 	"sync"
 )
 
+// Decoder is a FFV1 decoder instance.
 type Decoder struct {
 	width            uint32
 	height           uint32
@@ -14,19 +15,54 @@ type Decoder struct {
 	current_frame    internalFrame
 }
 
+// Frame contains a decoded FFV1 frame and relevant
+// data about the frame.
+//
+// If BitDepth is 8, image data is in Buf. If it is anything else,
+// image data is in Buf16.
+//
+// Image data consists of up to four contiguous planes, as follows:
+//   - If ColorSpace is YCbCr:
+//     - Plane 0 is Luma (always present)
+//     - If HasChroma is true, the next two planes are Cr and Cr, subsampled by
+//       ChromaSubsampleV and ChromaSubsampleH.
+//     - If HasAlpha is true, the next plane is alpha.
+//  - If ColorSpace is RGB:
+//    - Plane 0 is Red
+//    - Plane 1 is Green
+//    - Plane 2 is Blue
+//    - If HasAlpha is true, plane 4 is alpha.
 type Frame struct {
-	Buf              [][]byte
-	Buf16            [][]uint16
-	Width            uint32
-	Height           uint32
-	BitDepth         uint8
-	ColorSpace       int
-	HasChroma        bool
-	HasAlpha         bool
+	// Image data. Valid only when BitDepth is 8.
+	Buf [][]byte
+	// Image data. Valid only when BitDepth is greater than 8.
+	Buf16 [][]uint16
+	// Width of the frame, in pixels.
+	Width uint32
+	// Height of the frame, in pixels.
+	Height uint32
+	// BitDepth of the frame (8-16).
+	BitDepth uint8
+	// ColorSpace of the frame. See the ColorSpace constants.
+	ColorSpace int
+	// Whether or not chroma planes are present.
+	HasChroma bool
+	// Whether or not an alpha plane is present.
+	HasAlpha bool
+	// The log2 vertical chroma subampling value.
 	ChromaSubsampleV uint8
+	// The log2 horizontal chroma subsampling value.
 	ChromaSubsampleH uint8
 }
 
+// NewDecoder creates a new FFV1 decoder instance.
+//
+// 'record' is the codec private data provided by the container. For
+// Matroska, this is what is in CodecPrivate (adjusted for e.g. VFW
+// data that may be before it).
+//
+// 'width' and 'height' are the frame width and height provided by
+// the container.
 func NewDecoder(record []byte, width uint32, height uint32) (*Decoder, error) {
 	ret := new(Decoder)
 
@@ -47,6 +83,10 @@ func NewDecoder(record []byte, width uint32, height uint32) (*Decoder, error) {
 	return ret, nil
 }
 
+// DecodeFrame takes a packet and decodes it to a ffv1.Frame.
+//
+// Slice threading is used by default, with one goroutine per
+// slice.
 func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 
 	// Allocate and fill frame info
