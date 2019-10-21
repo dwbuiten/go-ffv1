@@ -351,7 +351,6 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 		offset := int(s.start_y*d.width + s.start_x)
 		for y := 0; y < int(s.height); y++ {
 			// RGB *must* have chroma planes, so this is safe.
-			// TODO: Golomb calls.
 			d.decodeLine(c, gc, s, frame, int(s.width), int(s.height), int(d.width), offset, y, 0, 0)
 			d.decodeLine(c, gc, s, frame, int(s.width), int(s.height), int(d.width), offset, y, 1, 1)
 			d.decodeLine(c, gc, s, frame, int(s.width), int(s.height), int(d.width), offset, y, 2, 1)
