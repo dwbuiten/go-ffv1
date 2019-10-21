@@ -20,75 +20,39 @@ func deriveBorders16(plane []uint16, x int, y int, width int, height int, stride
 	// Please never implement an actual decoder this way.
 
 	// T
-	if y == 0 || y == 1 {
-		T = 0
-	} else {
+	if y > 1 {
 		T = int(plane[pos-(2*stride)])
 	}
 
 	// L
-	if y == 0 {
-		if x == 0 || x == 1 {
-			L = 0
-		} else {
-			L = int(plane[pos-2])
-		}
-	} else {
-		if x == 0 {
-			L = 0
-		} else if x == 1 {
-			L = int(plane[pos-(1*stride)-1])
-		} else {
-			L = int(plane[pos-2])
-		}
+	if y > 0 && x == 1 {
+		L = int(plane[pos-stride-1])
+	} else if x > 1 {
+		L = int(plane[pos-2])
 	}
 
 	// t
-	if y == 0 {
-		t = 0
-	} else {
-		t = int(plane[pos-(1*stride)])
+	if y > 0 {
+		t = int(plane[pos-stride])
 	}
 
 	// l
-	if y == 0 {
-		if x == 0 {
-			l = 0
-		} else {
-			l = int(plane[pos-1])
-		}
-	} else {
-		if x == 0 {
-			l = int(plane[pos-(1*stride)])
-		} else {
-			l = int(plane[pos-1])
-		}
+	if x > 0 {
+		l = int(plane[pos-1])
+	} else if y > 0 {
+		l = int(plane[pos-stride])
 	}
 
 	// tl
-	if y == 0 {
-		tl = 0
-	} else {
-		if x == 0 {
-			if y == 1 {
-				tl = 0
-			} else {
-				tl = int(plane[pos-(2*stride)])
-			}
-		} else {
-			tl = int(plane[pos-(1*stride)-1])
-		}
+	if y > 1 && x == 0 {
+		tl = int(plane[pos-(2*stride)])
+	} else if y > 0 && x > 0 {
+		tl = int(plane[pos-stride-1])
 	}
 
 	// tr
-	if y == 0 {
-		tr = 0
-	} else {
-		if x == width-1 {
-			tr = int(plane[pos-(1*stride)])
-		} else {
-			tr = int(plane[pos-(1*stride)+1])
-		}
+	if y > 0 {
+		tr = int(plane[pos-stride+min(1, width-1-x)])
 	}
 
 	return T, L, t, l, tr, tl
