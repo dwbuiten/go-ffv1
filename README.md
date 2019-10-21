@@ -19,6 +19,11 @@ TODO
 
 * 16-bit RGB (requires 17-bit scratch buffer)
 
+API
+---
+
+You can read the API godoc at [godoc.org/github.com/dwbuiten/go-ffv1/ffv1](https://godoc.org/github.com/dwbuiten/go-ffv1/ffv1).
+
 Example of Decoding FFV1 in Matroska
 ---
 
