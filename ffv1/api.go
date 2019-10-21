@@ -125,7 +125,13 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 		if d.record.extra_plane {
 			ret.Buf[3] = make([]byte, int(d.width*d.height))
 		}
-	} else {
+	}
+
+	// We allocate *both* if it's 8bit RGB since I'm a terrible person and
+	// I wanted to use it as a scratch space, since JPEG2000-RCT is very
+	// annoyingly coded as n+1 bits, and I wanted the implementation
+	// to be straightforward... RIP.
+	if d.record.bits_per_raw_sample > 8 || d.record.colorspace_type == 1 {
 		ret.Buf16 = make([][]uint16, numPlanes)
 		ret.Buf16[0] = make([]uint16, int(d.width*d.height))
 		if d.record.chroma_planes {
@@ -168,6 +174,11 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 		if err != nil {
 			return nil, fmt.Errorf("slice %d failed: %s", i, err.Error())
 		}
+	}
+
+	// Delete the scratch buffer, if needed, as per above.
+	if d.record.bits_per_raw_sample == 8 && d.record.colorspace_type == 1 {
+		ret.Buf16 = nil
 	}
 
 	return ret, nil

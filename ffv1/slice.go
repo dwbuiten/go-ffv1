@@ -192,17 +192,23 @@ func (d *Decoder) decodeLine(c *rangecoder.Coder, gc *golomb.Coder, s *slice, fr
 
 		var buf []byte
 		var buf16 []uint16
-		if d.record.bits_per_raw_sample == 8 {
+		if d.record.bits_per_raw_sample == 8 && d.record.colorspace_type != 1 {
 			buf = frame.Buf[p][offset:]
 		} else {
 			buf16 = frame.Buf16[p][offset:]
+		}
+
+		// 3.8. Coding of the Sample Difference
+		shift := d.record.bits_per_raw_sample
+		if d.record.colorspace_type == 1 {
+			shift = d.record.bits_per_raw_sample + 1
 		}
 
 		// Derive neighbours
 		//
 		// See pred.go for details.
 		var T, L, t, l, tr, tl int
-		if d.record.bits_per_raw_sample == 8 {
+		if d.record.bits_per_raw_sample == 8 && d.record.colorspace_type != 1 {
 			T, L, t, l, tr, tl = deriveBorders(buf, x, y, w, h, stride)
 		} else {
 			T, L, t, l, tr, tl = deriveBorders16(buf16, x, y, w, h, stride)
@@ -222,7 +228,7 @@ func (d *Decoder) decodeLine(c *rangecoder.Coder, gc *golomb.Coder, s *slice, fr
 
 		var diff int32
 		if gc != nil {
-			diff = gc.SG(context, &s.golomb_state[qt][context])
+			diff = gc.SG(context, &s.golomb_state[qt][context], uint(shift))
 		} else {
 			diff = c.SR(s.state[qt][context])
 		}
@@ -260,9 +266,10 @@ func (d *Decoder) decodeLine(c *rangecoder.Coder, gc *golomb.Coder, s *slice, fr
 		} else {
 			val += int32(getMedian(l, t, l+t-tl))
 		}
-		val = val & ((1 << d.record.bits_per_raw_sample) - 1)
 
-		if d.record.bits_per_raw_sample == 8 {
+		val = val & ((1 << shift) - 1)
+
+		if d.record.bits_per_raw_sample == 8 && d.record.colorspace_type != 1 {
 			buf[(y*stride)+x] = byte(val)
 		} else {
 			buf16[(y*stride)+x] = uint16(val)
@@ -285,45 +292,83 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 		primary_color_count++
 	}
 
-	for p := 0; p < primary_color_count; p++ {
-		var plane_pixel_height int
-		var plane_pixel_width int
-		var plane_pixel_stride int
-		var start_x int
-		var start_y int
-		var quant_table int
+	if d.record.colorspace_type != 1 {
+		// YCbCr Mode
+		//
+		// Planes are independent.
+		//
+		// See: 3.7.1. YCbCr
+		for p := 0; p < primary_color_count; p++ {
+			var plane_pixel_height int
+			var plane_pixel_width int
+			var plane_pixel_stride int
+			var start_x int
+			var start_y int
+			var quant_table int
 
-		// See: * 4.6.2. plane_pixel_height
-		//      * 4.7.1. plane_pixel_width
-		if p == 0 || p == 1+chroma_planes {
-			plane_pixel_height = int(s.height)
-			plane_pixel_width = int(s.width)
-			plane_pixel_stride = int(d.width)
-			start_x = int(s.start_x)
-			start_y = int(s.start_y)
-			if p == 0 {
-				quant_table = 0
+			// See: * 4.6.2. plane_pixel_height
+			//      * 4.7.1. plane_pixel_width
+			if p == 0 || p == 1+chroma_planes {
+				plane_pixel_height = int(s.height)
+				plane_pixel_width = int(s.width)
+				plane_pixel_stride = int(d.width)
+				start_x = int(s.start_x)
+				start_y = int(s.start_y)
+				if p == 0 {
+					quant_table = 0
+				} else {
+					quant_table = chroma_planes
+				}
 			} else {
-				quant_table = chroma_planes
+				// This is, of course, silly, but I want to do it "by the spec".
+				plane_pixel_height = int(math.Ceil(float64(s.height) / float64(uint32(1)<<d.record.log2_v_chroma_subsample)))
+				plane_pixel_width = int(math.Ceil(float64(s.width) / float64(uint32(1)<<d.record.log2_h_chroma_subsample)))
+				plane_pixel_stride = int(math.Ceil(float64(d.width) / float64(uint32(1)<<d.record.log2_h_chroma_subsample)))
+				start_x = int(math.Ceil(float64(s.start_x) / float64(uint32(1)<<d.record.log2_v_chroma_subsample)))
+				start_y = int(math.Ceil(float64(s.start_y) / float64(uint32(1)<<d.record.log2_h_chroma_subsample)))
+				quant_table = 1
 			}
-		} else {
-			// This is, of course, silly, but I want to do it "by the spec".
-			plane_pixel_height = int(math.Ceil(float64(s.height) / float64(uint32(1)<<d.record.log2_v_chroma_subsample)))
-			plane_pixel_width = int(math.Ceil(float64(s.width) / float64(uint32(1)<<d.record.log2_h_chroma_subsample)))
-			plane_pixel_stride = int(math.Ceil(float64(d.width) / float64(uint32(1)<<d.record.log2_h_chroma_subsample)))
-			start_x = int(math.Ceil(float64(s.start_x) / float64(uint32(1)<<d.record.log2_v_chroma_subsample)))
-			start_y = int(math.Ceil(float64(s.start_y) / float64(uint32(1)<<d.record.log2_h_chroma_subsample)))
-			quant_table = 1
-		}
 
-		// 3.8.2.2.1. Run Length Coding
+			// 3.8.2.2.1. Run Length Coding
+			if gc != nil {
+				gc.NewPlane(uint32(plane_pixel_width))
+			}
+
+			for y := 0; y < plane_pixel_height; y++ {
+				offset := start_y*plane_pixel_stride + start_x
+				d.decodeLine(c, gc, s, frame, plane_pixel_width, plane_pixel_height, plane_pixel_stride, offset, y, p, quant_table)
+			}
+		}
+	} else {
+		// RGB (JPEG2000-RCT) Mode
+		//
+		// All planes are coded per line.
+		//
+		// See: 3.7.2. RGB
 		if gc != nil {
-			gc.NewPlane(uint32(plane_pixel_width))
+			gc.NewPlane(uint32(s.width))
+		}
+		offset := int(s.start_y*d.width + s.start_x)
+		for y := 0; y < int(s.height); y++ {
+			// RGB *must* have chroma planes, so this is safe.
+			// TODO: Golomb calls.
+			d.decodeLine(c, gc, s, frame, int(s.width), int(s.height), int(d.width), offset, y, 0, 0)
+			d.decodeLine(c, gc, s, frame, int(s.width), int(s.height), int(d.width), offset, y, 1, 1)
+			d.decodeLine(c, gc, s, frame, int(s.width), int(s.height), int(d.width), offset, y, 2, 1)
+			if d.record.extra_plane {
+				d.decodeLine(c, gc, s, frame, int(s.width), int(s.height), int(d.width), offset, y, 3, 2)
+			}
 		}
 
-		for y := 0; y < plane_pixel_height; y++ {
-			offset := start_y*plane_pixel_stride + start_x
-			d.decodeLine(c, gc, s, frame, plane_pixel_width, plane_pixel_height, plane_pixel_stride, offset, y, p, quant_table)
+		// Convert to RGB all at once, cache locality be damned.
+		if d.record.bits_per_raw_sample == 8 {
+			rct8(frame.Buf, frame.Buf16, int(s.width), int(s.height), int(d.width), offset)
+		} else if d.record.bits_per_raw_sample >= 9 && d.record.bits_per_raw_sample <= 15 && !d.record.extra_plane {
+			// See: 3.7.2. RGB
+			rctMid(frame.Buf16, int(s.width), int(s.height), int(d.width), offset, uint(d.record.bits_per_raw_sample))
+		} else {
+			// TODO: 32-bit buffer t hold 17-bit JPEG2000-RCT
+			rct16(frame.Buf16, int(s.width), int(s.height), int(d.width), offset)
 		}
 	}
 }

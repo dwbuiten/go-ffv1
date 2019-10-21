@@ -65,7 +65,7 @@ func (c *Coder) NewLine() {
 //
 // See: * 3.8.2. Golomb Rice Mode
 //      * 4. Bitstream
-func (c *Coder) SG(context int32, state *State) int32 {
+func (c *Coder) SG(context int32, state *State, bits uint) int32 {
 	// Section 3.8.2.2. Run Mode
 	if context == 0 && c.run_mode == 0 {
 		c.run_mode = 1
@@ -97,7 +97,7 @@ func (c *Coder) SG(context int32, state *State) int32 {
 		// No more repeats; the run is over. Read a new symbol.
 		if c.run_count < 0 {
 			c.newRun()
-			diff := c.get_vlc_symbol(state)
+			diff := c.get_vlc_symbol(state, bits)
 			// 3.8.2.2.2. Level Coding
 			if diff >= 0 {
 				diff++
@@ -112,20 +112,27 @@ func (c *Coder) SG(context int32, state *State) int32 {
 	} else {
 		// We aren't in run mode; get a new symbol.
 		c.x++
-		return c.get_vlc_symbol(state)
+		return c.get_vlc_symbol(state, bits)
 	}
 }
 
-// Simple sign extension. Not *actually* needd in Go.
-func sign_extend(n int32) int32 {
-	ret := int8(n)
-	return int32(ret)
+// Simple sign extension.
+func sign_extend(n int32, bits uint) int32 {
+	if bits == 8 {
+		ret := int8(n)
+		return int32(ret)
+	} else {
+		ret := n
+		ret <<= 32 - bits
+		ret >>= 32 - bits
+		return ret
+	}
 }
 
 // Gets the next Golomb-Rice coded symbol.
 //
 // See: 3.8.2.3. Scalar Mode
-func (c *Coder) get_vlc_symbol(state *State) int32 {
+func (c *Coder) get_vlc_symbol(state *State, bits uint) int32 {
 	i := state.count
 	k := uint32(0)
 
@@ -134,13 +141,13 @@ func (c *Coder) get_vlc_symbol(state *State) int32 {
 		i += i
 	}
 
-	v := c.get_sr_golomb(k)
+	v := c.get_sr_golomb(k, bits)
 
 	if 2*state.drift < -state.count {
 		v = -1 - v
 	}
 
-	ret := sign_extend(v + state.bias)
+	ret := sign_extend(v+state.bias, bits)
 
 	state.error_sum += abs32(v)
 	state.drift += v
@@ -165,8 +172,8 @@ func (c *Coder) get_vlc_symbol(state *State) int32 {
 // Gets the next signed Golomb-Rice code
 //
 // See: 3.8.2.1. Signed Golomb Rice Codes
-func (c *Coder) get_sr_golomb(k uint32) int32 {
-	v := c.get_ur_golomb(k)
+func (c *Coder) get_sr_golomb(k uint32, bits uint) int32 {
+	v := c.get_ur_golomb(k, bits)
 	if v&1 == 1 {
 		return -(v >> 1) - 1
 	} else {
@@ -177,11 +184,11 @@ func (c *Coder) get_sr_golomb(k uint32) int32 {
 // Gets the next unsigned Golomb-Rice code
 //
 // See: 3.8.2.1. Signed Golomb Rice Codes
-func (c *Coder) get_ur_golomb(k uint32) int32 {
+func (c *Coder) get_ur_golomb(k uint32, bits uint) int32 {
 	for prefix := 0; prefix < 12; prefix++ {
 		if c.r.u(1) == 1 {
 			return int32(c.r.u(k)) + int32((prefix << k))
 		}
 	}
-	return int32(c.r.u(8)) + 11
+	return int32(c.r.u(uint32(bits))) + 11
 }
