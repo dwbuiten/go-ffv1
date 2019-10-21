@@ -30,9 +30,9 @@ type Decoder struct {
 //       ChromaSubsampleV and ChromaSubsampleH.
 //     - If HasAlpha is true, the next plane is alpha.
 //  - If ColorSpace is RGB:
-//    - Plane 0 is Red
-//    - Plane 1 is Green
-//    - Plane 2 is Blue
+//    - Plane 0 is Green
+//    - Plane 1 is Blue
+//    - Plane 2 is Red
 //    - If HasAlpha is true, plane 4 is alpha.
 type Frame struct {
 	// Image data. Valid only when BitDepth is 8.
