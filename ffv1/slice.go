@@ -167,10 +167,86 @@ func (d *Decoder) parseSliceHeader(c *rangecoder.Coder, s *slice) {
 	s.height = ((s.header.slice_y + s.header.slice_height_minus1 + 1) * d.height / (uint32(d.record.num_v_slices_minus1) + 1)) - s.start_y
 }
 
+// Line decoding.
+//
+// So, so many arguments. I would have just inlined this whole thing
+// but it needs to be separate because of RGB mode where every line
+// is done in its entirety instead of per plane.
+//
+// Many could be refactored into being in the context, but I haven't
+// got to it yet, so instead, I shall repent once for each function
+// argument, twice daily.
+//
+// See: 4.7. Line
+func (d *Decoder) decodeLine(c *rangecoder.Coder, gc *golomb.Coder, s *slice, frame *Frame, w int, h int, stride int, offset int, y int, p int, qt int) {
+	// Runs are horizontal and thus cannot run more than a line.
+	//
+	// See: 3.8.2.2.1. Run Length Coding
+	if gc != nil {
+		gc.NewLine()
+	}
+
+	// 4.7.4. sample_difference
+	for x := 0; x < w; x++ {
+		var sign bool
+
+		var buf []byte
+		var buf16 []uint16
+		if d.record.bits_per_raw_sample == 8 {
+			buf = frame.Buf[p][offset:]
+		} else {
+			buf16 = frame.Buf16[p][offset:]
+		}
+
+		// Derive neighbours
+		//
+		// See pred.go for details.
+		var T, L, t, l, tr, tl int
+		if d.record.bits_per_raw_sample == 8 {
+			T, L, t, l, tr, tl = deriveBorders(buf, x, y, w, h, stride)
+		} else {
+			T, L, t, l, tr, tl = deriveBorders16(buf16, x, y, w, h, stride)
+		}
+
+		// See pred.go for details.
+		//
+		// See also: * 3.4. Context
+		//           * 3.6. Quantization Table Set Indexes
+		context := getContext(d.record.quant_tables[s.header.quant_table_set_index[qt]], T, L, t, l, tr, tl)
+		if context < 0 {
+			context = -context
+			sign = true
+		} else {
+			sign = false
+		}
+
+		var diff int32
+		if gc != nil {
+			diff = gc.SG(context, &s.golomb_state[qt][context])
+		} else {
+			diff = c.SR(s.state[qt][context])
+		}
+
+		// 3.4. Context
+		if sign {
+			diff = -diff
+		}
+
+		// 3.8. Coding of the Sample Difference
+		val := diff + int32(getMedian(l, t, l+t-tl))
+		val = val & ((1 << d.record.bits_per_raw_sample) - 1)
+
+		if d.record.bits_per_raw_sample == 8 {
+			buf[(y*stride)+x] = byte(val)
+		} else {
+			buf16[(y*stride)+x] = uint16(val)
+		}
+	}
+}
+
 // Decoding happens here.
 //
 // See: * 4.6. Slice Content
-//      * 4.7. Line
 func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *sliceInfo, s *slice, frame *Frame) {
 	// 4.6.1. primary_color_count
 	primary_color_count := 1
@@ -220,71 +296,8 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 		}
 
 		for y := 0; y < plane_pixel_height; y++ {
-			// 4.7. Line
-
-			// Runs are horizontal and thus cannot run more than a line.
-			//
-			// See: 3.8.2.2.1. Run Length Coding
-			if gc != nil {
-				gc.NewLine()
-			}
-
-			// 4.7.4. sample_difference
-			for x := 0; x < plane_pixel_width; x++ {
-				var sign bool
-
-				var buf []byte
-				var buf16 []uint16
-				if d.record.bits_per_raw_sample == 8 {
-					buf = frame.Buf[p][start_y*plane_pixel_stride+start_x:]
-				} else {
-					buf16 = frame.Buf16[p][start_y*plane_pixel_stride+start_x:]
-				}
-
-				// Derive neighbours
-				//
-				// See pred.go for details.
-				var T, L, t, l, tr, tl int
-				if d.record.bits_per_raw_sample == 8 {
-					T, L, t, l, tr, tl = deriveBorders(buf, x, y, plane_pixel_width, plane_pixel_height, plane_pixel_stride)
-				} else {
-					T, L, t, l, tr, tl = deriveBorders16(buf16, x, y, plane_pixel_width, plane_pixel_height, plane_pixel_stride)
-				}
-
-				// See pred.go for details.
-				//
-				// See also: * 3.4. Context
-				//           * 3.6. Quantization Table Set Indexes
-				context := getContext(d.record.quant_tables[s.header.quant_table_set_index[quant_table]], T, L, t, l, tr, tl)
-				if context < 0 {
-					context = -context
-					sign = true
-				} else {
-					sign = false
-				}
-
-				var diff int32
-				if gc != nil {
-					diff = gc.SG(context, &s.golomb_state[quant_table][context])
-				} else {
-					diff = c.SR(s.state[quant_table][context])
-				}
-
-				// 3.4. Context
-				if sign {
-					diff = -diff
-				}
-
-				// 3.8. Coding of the Sample Difference
-				val := diff + int32(getMedian(l, t, l+t-tl))
-				val = val & ((1 << d.record.bits_per_raw_sample) - 1)
-
-				if d.record.bits_per_raw_sample == 8 {
-					buf[(y*plane_pixel_stride)+x] = byte(val)
-				} else {
-					buf16[(y*plane_pixel_stride)+x] = uint16(val)
-				}
-			}
+			offset := start_y*plane_pixel_stride + start_x
+			d.decodeLine(c, gc, s, frame, plane_pixel_width, plane_pixel_height, plane_pixel_stride, offset, y, p, quant_table)
 		}
 	}
 }
@@ -383,6 +396,8 @@ func (d *Decoder) decodeSlice(buf []byte, header *internalFrame, slicenum int, f
 		gc = golomb.NewCoder(buf[header.slice_info[slicenum].pos+offset:])
 	}
 
+	// Don't worry, I fully understand how non-idiomatic and
+	// ugly passing both c and gc is.
 	d.decodeSliceContent(c, gc, &header.slice_info[slicenum], &header.slices[slicenum], frame)
 
 	return nil
