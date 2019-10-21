@@ -233,7 +233,33 @@ func (d *Decoder) decodeLine(c *rangecoder.Coder, gc *golomb.Coder, s *slice, fr
 		}
 
 		// 3.8. Coding of the Sample Difference
-		val := diff + int32(getMedian(l, t, l+t-tl))
+		val := diff
+		if d.record.colorspace_type == 0 && d.record.bits_per_raw_sample == 16 && gc == nil {
+			// 3.3. Median Predictor
+			var left16s int
+			var top16s int
+			var diag16s int
+
+			if l >= 32768 {
+				left16s = l - 65536
+			} else {
+				left16s = l
+			}
+			if t >= 32768 {
+				top16s = t - 65536
+			} else {
+				top16s = t
+			}
+			if tl >= 32768 {
+				diag16s = tl - 65536
+			} else {
+				diag16s = tl
+			}
+
+			val += int32(getMedian(left16s, top16s, left16s+top16s-diag16s))
+		} else {
+			val += int32(getMedian(l, t, l+t-tl))
+		}
 		val = val & ((1 << d.record.bits_per_raw_sample) - 1)
 
 		if d.record.bits_per_raw_sample == 8 {
