@@ -21,13 +21,13 @@ func rct8(dst [][]byte, src [][]uint16, w int, h int, stride int, offset int) {
 			B[(y*stride)+x] = byte(b)
 			R[(y*stride)+x] = byte(r)
 		}
-		if len(src) == 4 {
-			s := src[3][offset:]
-			d := dst[3][offset:]
-			for y := 0; y < h; y++ {
-				for x := 0; x < w; x++ {
-					d[(y*stride)+x] = byte(s[(y*stride)+x])
-				}
+	}
+	if len(src) == 4 {
+		s := src[3][offset:]
+		d := dst[3][offset:]
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				d[(y*stride)+x] = byte(s[(y*stride)+x])
 			}
 		}
 	}
