@@ -39,6 +39,8 @@ type Frame struct {
 	Buf [][]byte
 	// Image data. Valid only when BitDepth is greater than 8.
 	Buf16 [][]uint16
+	// Unexported 32-bit scratch buffer for 16-bit JPEG2000-RCT RGB
+	buf32 [][]uint32
 	// Width of the frame, in pixels.
 	Width uint32
 	// Height of the frame, in pixels.
@@ -149,6 +151,19 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 		}
 	}
 
+	// For 16-bit RGB we need a 32-bit scratch space beause we need to predict
+	// based on 17-bit values in the JPEG2000-RCT space, so just allocate a
+	// whole frame, because I am lazy. Is it slow? Yes.
+	if d.record.bits_per_raw_sample == 16 && d.record.colorspace_type == 1 {
+		ret.buf32 = make([][]uint32, numPlanes)
+		ret.buf32[0] = make([]uint32, int(d.width*d.height))
+		ret.buf32[1] = make([]uint32, int(d.width*d.height))
+		ret.buf32[2] = make([]uint32, int(d.width*d.height))
+		if d.record.extra_plane {
+			ret.buf32[3] = make([]uint32, int(d.width*d.height))
+		}
+	}
+
 	// We parse the frame's keyframe info outside the slice decoding
 	// loop so we know ahead of time if each slice has to refresh its
 	// states or not. This allows easy slice threading.
@@ -184,6 +199,9 @@ func (d *Decoder) DecodeFrame(frame []byte) (*Frame, error) {
 	if d.record.bits_per_raw_sample == 8 && d.record.colorspace_type == 1 {
 		ret.Buf16 = nil
 	}
+
+	// We'll never need this again.
+	ret.buf32 = nil
 
 	return ret, nil
 }

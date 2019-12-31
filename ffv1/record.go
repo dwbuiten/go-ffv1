@@ -87,11 +87,6 @@ func parseConfigRecord(buf []byte, record *configRecord) error {
 		return fmt.Errorf("golomb-rice mode cannot have >8bit per sample")
 	}
 
-	// TODO: Add 32-bit scratch buffer after refactoring.
-	if record.bits_per_raw_sample == 16 && record.colorspace_type == 1 {
-		return fmt.Errorf("16-bit RGB mode is currently unimplemented")
-	}
-
 	// 4.1.6. chroma_planes
 	record.chroma_planes = c.BR(state)
 	if record.colorspace_type == 1 && !record.chroma_planes {

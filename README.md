@@ -17,7 +17,7 @@ of code generation etc... one day. Any day now. If we keep waiting, it may happe
 TODO
 ---
 
-* 16-bit RGB (requires 17-bit scratch buffer)
+* Fix Alpha Support
 
 API
 ---

@@ -192,8 +192,11 @@ func (d *Decoder) decodeLine(c *rangecoder.Coder, gc *golomb.Coder, s *slice, fr
 
 		var buf []byte
 		var buf16 []uint16
+		var buf32 []uint32
 		if d.record.bits_per_raw_sample == 8 && d.record.colorspace_type != 1 {
 			buf = frame.Buf[p][offset:]
+		} else if d.record.bits_per_raw_sample == 16 && d.record.colorspace_type == 1 {
+			buf32 = frame.buf32[p][offset:]
 		} else {
 			buf16 = frame.Buf16[p][offset:]
 		}
@@ -210,6 +213,8 @@ func (d *Decoder) decodeLine(c *rangecoder.Coder, gc *golomb.Coder, s *slice, fr
 		var T, L, t, l, tr, tl int
 		if d.record.bits_per_raw_sample == 8 && d.record.colorspace_type != 1 {
 			T, L, t, l, tr, tl = deriveBorders(buf, x, y, w, h, stride)
+		} else if d.record.bits_per_raw_sample == 16 && d.record.colorspace_type == 1 {
+			T, L, t, l, tr, tl = deriveBorders32(buf32, x, y, w, h, stride)
 		} else {
 			T, L, t, l, tr, tl = deriveBorders16(buf16, x, y, w, h, stride)
 		}
@@ -271,6 +276,8 @@ func (d *Decoder) decodeLine(c *rangecoder.Coder, gc *golomb.Coder, s *slice, fr
 
 		if d.record.bits_per_raw_sample == 8 && d.record.colorspace_type != 1 {
 			buf[(y*stride)+x] = byte(val)
+		} else if d.record.bits_per_raw_sample == 16 && d.record.colorspace_type == 1 {
+			buf32[(y*stride)+x] = uint32(val)
 		} else {
 			buf16[(y*stride)+x] = uint16(val)
 		}
@@ -366,8 +373,7 @@ func (d *Decoder) decodeSliceContent(c *rangecoder.Coder, gc *golomb.Coder, si *
 			// See: 3.7.2. RGB
 			rctMid(frame.Buf16, int(s.width), int(s.height), int(d.width), offset, uint(d.record.bits_per_raw_sample))
 		} else {
-			// TODO: 32-bit buffer t hold 17-bit JPEG2000-RCT
-			rct16(frame.Buf16, int(s.width), int(s.height), int(d.width), offset)
+			rct16(frame.Buf16, frame.buf32, int(s.width), int(s.height), int(d.width), offset)
 		}
 	}
 }

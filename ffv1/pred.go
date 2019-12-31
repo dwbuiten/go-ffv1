@@ -3,7 +3,8 @@ package ffv1
 // This file is used as a template for pred16.go (high bit depth median prediction)
 // Please run 'go generate' if you modify the following function.
 //
-//go:generate ./genhbd
+//go:generate ./genhbd 16
+//go:generate ./genhbd 32
 
 // Calculates all the neighbouring pixel values given:
 //
