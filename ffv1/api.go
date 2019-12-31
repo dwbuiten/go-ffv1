@@ -72,6 +72,10 @@ func NewDecoder(record []byte, width uint32, height uint32) (*Decoder, error) {
 		return nil, fmt.Errorf("invalid dimensions: %dx%d", width, height)
 	}
 
+	if len(record) == 0 {
+		return nil, fmt.Errorf("invalid record with length zero")
+	}
+
 	ret.width = width
 	ret.height = height
 
