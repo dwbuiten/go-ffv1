@@ -2,8 +2,11 @@
 // of draft-ietf-cellar-ffv1.
 package rangecoder
 
+// Cross-references are to
+// https://tools.ietf.org/id/draft-ietf-cellar-ffv1-17
+
 // Coder is an instance of a range coder, as defined in:
-//     Nigel, G. and N. Martin, "Range encoding: an algorithm for
+//     Martin, G. Nigel N., "Range encoding: an algorithm for
 //     removing redundancy from a digitised message.", July 1979.
 type Coder struct {
 	buf        []byte
@@ -22,11 +25,11 @@ func NewCoder(buf []byte) *Coder {
 	ret := new(Coder)
 
 	ret.buf = buf
-	// Figure 11.
+	// Figure 15.
 	ret.pos = 2
-	// Figure 10.
+	// Figure 14.
 	ret.low = uint16(buf[0])<<8 | uint16(buf[1])
-	// Figure 9.
+	// Figure 13.
 	ret.rng = 0xFF00
 	ret.cur_byte = -1
 	if ret.low >= ret.rng {
@@ -42,7 +45,7 @@ func NewCoder(buf []byte) *Coder {
 
 // Refills the buffer
 func (c *Coder) refill() {
-	// Figure 8.
+	// Figure 12.
 	if c.rng < 0x100 {
 		c.rng = c.rng << 8
 		c.low = c.low << 8
@@ -55,7 +58,7 @@ func (c *Coder) refill() {
 
 // Gets the next boolean state
 func (c *Coder) get(state *uint8) bool {
-	// Figure 6.
+	// Figure 10.
 	rangeoff := uint16((uint32(c.rng) * uint32((*state))) >> 8)
 	c.rng -= rangeoff
 	if c.low < c.rng {
@@ -126,11 +129,11 @@ func (c *Coder) symbol(state []uint8, signed bool) int32 {
 func (c *Coder) SetTable(table [256]uint8) {
 	// 3.8.1.4. State Transition Table
 
-	// Figure 13.
+	// Figure 17.
 	for i := 0; i < 256; i++ {
 		c.one_state[i] = table[i]
 	}
-	// Figure 14.
+	// Figure 18.
 	for i := 1; i < 255; i++ {
 		c.zero_state[i] = uint8(uint16(256) - uint16(c.one_state[256-i]))
 	}
