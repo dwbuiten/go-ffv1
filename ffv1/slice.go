@@ -214,9 +214,9 @@ func (d *Decoder) decodeLine(c *rangecoder.Coder, gc *golomb.Coder, s *slice, fr
 		if d.record.bits_per_raw_sample == 8 && d.record.colorspace_type != 1 {
 			T, L, t, l, tr, tl = deriveBorders(buf, x, y, w, h, stride)
 		} else if d.record.bits_per_raw_sample == 16 && d.record.colorspace_type == 1 {
-			T, L, t, l, tr, tl = deriveBorders32(buf32, x, y, w, h, stride)
+			T, L, t, l, tr, tl = deriveBorders(buf32, x, y, w, h, stride)
 		} else {
-			T, L, t, l, tr, tl = deriveBorders16(buf16, x, y, w, h, stride)
+			T, L, t, l, tr, tl = deriveBorders(buf16, x, y, w, h, stride)
 		}
 
 		// See pred.go for details.
