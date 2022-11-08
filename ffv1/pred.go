@@ -1,10 +1,6 @@
 package ffv1
 
-// This file is used as a template for pred16.go (high bit depth median prediction)
-// Please run 'go generate' if you modify the following function.
-//
-//go:generate ./genhbd 16
-//go:generate ./genhbd 32
+// This file implements 8, 16 and 32 bit depth median prediction.
 
 // Calculates all the neighbouring pixel values given:
 //
@@ -36,7 +32,7 @@ package ffv1
 //
 // See: * 3.1. Border
 //      * 3.2. Samples
-func deriveBorders(plane []uint8, x int, y int, width int, height int, stride int) (int, int, int, int, int, int) {
+func deriveBorders[U interface{ uint8 | uint16 | uint32 }](plane []U, x int, y int, width int, height int, stride int) (int, int, int, int, int, int) {
 	var T int
 	var L int
 	var t int
